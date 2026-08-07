@@ -13,14 +13,3 @@ def home():
     return {"message": "Backend is running successfully"}
 
 
-@app.get("/test-db")
-def test_db():
-
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT 1"))
-        value = result.scalar()
-
-    return {
-        "database": "Connected",
-        "result": value
-    }
