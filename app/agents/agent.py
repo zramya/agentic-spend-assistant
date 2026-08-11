@@ -22,6 +22,7 @@ from app.core.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_IN
 load_dotenv()
 
 
+MAX_SQL_RETRIES = 1
 
 
 def _get_llm():
@@ -30,8 +31,31 @@ def _get_llm():
    )
 
 
+def rephrase_query(query):
+    print("Inside Query",query)
+    llm = _get_llm()
 
+    prompt = f"""
+You are a query rewriting assistant.
 
+Rewrite the following user question into a clearer database query request.
+
+Rules:
+- Keep the same intent.
+- Do not add information.
+- Do not remove card IDs or customer IDs.
+- Do not mention Python classes, code, schema, or implementation.
+- Return ONLY the rewritten user question.
+
+Original question:
+{query}
+
+Rewritten question:
+"""
+
+    response = llm.invoke(prompt)
+
+    return response.content.strip()
 # class RouteDecision(BaseModel):
 #    route: Literal["VECTOR_DB", "RDBMS"]
 #    reason: str  # for debugging
@@ -185,6 +209,9 @@ Follow these rules:
 - Do not include refunds, payments, fees, or other non-spending
   transactions unless the user explicitly asks for them or the
   documented business requirement requires them.
+  - Do not add additional transaction filters such as status, approval,
+  posting state, or settlement state unless they are explicitly
+  required by the user's question or documented business rules.
 - For transaction-list questions, return the transaction fields
   needed to answer the question.
 - For summary questions, prefer aggregation rather than returning
@@ -235,6 +262,14 @@ Follow these rules:
   - When the user asks about reward points and a redemption value is
   requested or relevant to the documented use case, include the
   corresponding INR value using the provided reward point business rule.
+  - For spend comparison analysis, use billing cycle periods when
+  credit card billing information is available. Calculate spend and
+  transaction metrics from card_transactions within those billing
+  periods.
+  - For month-over-month spend comparison, use calendar month aggregation
+  based on transaction date unless the user explicitly asks for billing
+  cycle comparison.
+  
 
 8. AGGREGATION AND ANALYSIS
 
@@ -261,6 +296,9 @@ Follow these rules:
   required to retrieve the requested data.
 
 - Avoid unnecessary joins, columns, filters, and calculations.
+- For month-over-month comparison questions, retrieve only the relevant
+  comparison periods when the user specifies a month or billing period.
+  Do not return unrelated months unless the user asks for a complete history.
 
 9. QUERY CORRECTNESS
 - Ensure valid PostgreSQL syntax.
@@ -308,20 +346,64 @@ User question:
 )
    # preprare the chain and invoke with a query
    sql_chain = sql_prompt | llm
+   retry_count = state.get("retry_count", 0)
+   query = state["query"]
+
+   while retry_count <= MAX_SQL_RETRIES:
+
+        raw_sql = sql_chain.invoke(
+            {
+                "schema": schema_info,
+                "query": query,
+                "business_rules": business_rules,
+                "customer_id": state.get("customer_id")
+            }
+        )
+
+        generated_sql = raw_sql.content
+
+
+        try:
+            sql_result = db.run(generated_sql)
+            print("SQL Result:")
+            print(sql_result)
+
+        except Exception as err:
+            sql_result = f"Generated SQL execution error: {err}"
+
+        invalid_result = (
+        sql_result is None
+        or "error" in str(sql_result).lower()
+    )
+
+        if not invalid_result:
+                  break
+
+
+        retry_count += 1
+
+        if retry_count <= MAX_SQL_RETRIES:
+            print("No valid result. Retrying...")
+
+            query = rephrase_query(query)
+        
+
+            print("Rephrased query:")
+            print(query)
    # look for sql query only
-   raw_sql = sql_chain.invoke({"schema": schema_info,"query": state["query"], "business_rules": business_rules,"customer_id": state.get("customer_id")})
-   print("========GENERATED raw_sql query is: =====")
-   print(raw_sql.content)
-   generated_sql = raw_sql.content
+  #  raw_sql = sql_chain.invoke({"schema": schema_info,"query": state["query"], "business_rules": business_rules,"customer_id": state.get("customer_id")})
+  #  print("========GENERATED raw_sql query is: =====")
+  #  print(raw_sql.content)
+  #  generated_sql = raw_sql.content
 
 
-   # execute the generated sql query  to get the outout from RDMBS
-   try:
-       sql_result = db.run(generated_sql)
-   except Exception as err:
-       sql_result = f"Generated SQL execution error: {err}"
+  #  # execute the generated sql query  to get the outout from RDMBS
+  #  try:
+  #      sql_result = db.run(generated_sql)
+  #  except Exception as err:
+  #      sql_result = f"Generated SQL execution error: {err}"
 
-
+   
    # connect to LLM to get the natural language response
    structured_llm = llm.with_structured_output(SpendSummaryResponse)
 
@@ -377,11 +459,75 @@ Metadata:
    response["sql_query_executed"] = generated_sql
    # return the sql query is RAGState
    # and also the output in sql_result of RAGState
+
+   # connect to LLM to get the natural language response
+   structured_llm = llm.with_structured_output(SpendSummaryResponse)
+
+   nl_answer_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are a helpful Credit Card Spend Assistant.
+
+Answer the user's question using only the provided SQL results.
+
+Rules:
+
+- Answer exactly what the user asked.
+- Be concise, polite, professional, and user-friendly.
+- Use a respectful and natural tone.
+- Do not invent information.
+- Do not assume information that is not in the results.
+- Perform simple arithmetic only when clearly supported by the results
+  and required to answer the question.
+- Do not introduce unrelated metrics or analysis.
+- If the results are empty or insufficient, politely explain that the
+  requested information is unavailable.
+- Use ₹ for INR amounts and format monetary values clearly.
+- Use concise bullets when listing multiple results.
+- Do not mention SQL, databases, schemas, queries, or implementation
+  details.
+- If the user requests data modification, politely explain that such
+  operations are not supported.
+
+Metadata:
+- policy_citations: "N/A"
+- page_no: "N/A"
+- document_name: "credit_card_advisor"
+""",
+        ),
+        (
+            "human",
+            "Question: {query}\n\n"
+            "SQL Used:\n{sql}\n\n"
+            "Query Results:\n{result}",
+        ),
+    ]
+)
+   nl_chain = nl_answer_prompt | structured_llm
+   answer = nl_chain.invoke(
+      {
+          "query": query,
+          "sql": generated_sql,
+          "result": sql_result
+      }
+  )
+  #  answer = nl_chain.invoke(
+  #      {"query": state["query"], "sql": generated_sql, "result": sql_result}
+  #  )
+   print("[nl2sql_node] Answer generated.")
+   response = answer.model_dump()
+   response["policy_citations"] = "N/A"
+   response["sql_query_executed"] = generated_sql
+   # return the sql query is RAGState
+   # and also the output in sql_result of RAGState
    return {
        **state,
        "generated_sql": generated_sql,
        "sql_result": str(sql_result),
        "response": response,
+          "retry_count": retry_count
    }
 
 
@@ -558,6 +704,7 @@ def run_search_agent(query: str,customer_id: str | None = None):
        "retrieved_docs": [],
        "reranked_docs": [],
        "response": {},
+         "retry_count": 0,
    }
 
 
