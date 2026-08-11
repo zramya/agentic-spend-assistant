@@ -6,6 +6,7 @@ from typing import List, Optional
 
 class SpendSummaryRequest(BaseModel):
     query: str = Field(description="The user's question")
+    customer_id: str | None = None
 
 
 # # query api endpoint response format

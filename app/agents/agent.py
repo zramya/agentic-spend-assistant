@@ -16,6 +16,7 @@ from app.states.rag_state import AdvisorState
 # from src.api.v1.tools.vector_search_tool import vector_search_node
 from app.schemas.query_schema import SpendSummaryResponse
 from app.core.db import get_sql_database
+from app.core.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
 
 
 load_dotenv()
@@ -100,185 +101,215 @@ def nl2sql_node(state: AdvisorState) -> AdvisorState:
    # get the tables' live schema
    schema_info = db.get_table_info()
 
-   txn_type_info = db.run("""
-    SELECT DISTINCT txn_type
-    FROM card_transactions
-    ORDER BY txn_type;
-""")
-   
+#    txn_type_info = db.run("""
+#     SELECT DISTINCT txn_type
+#     FROM card_transactions
+#     ORDER BY txn_type;
+# """)
+
+   business_rules = f"""
+Fee waiver thresholds by card variant:
+{FEE_WAIVER_THRESHOLDS}
+
+Reward point redemption value:
+1 reward point = INR {REWARD_POINT_VALUE_INR}
+"""
    # write the system prompt and pass on the schema to get only sql query
    sql_prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """
-    You are an expert PostgreSQL SQL generator for a credit card
-    spend analysis system.
+    [
+        (
+            "system",
+            """
+You are an expert PostgreSQL SQL generator for a credit card spend
+analysis system.
 
-    Your task is to convert the user's natural-language question into
-    a single valid PostgreSQL SELECT query that retrieves the data
-    required to answer the question.
+Your task is to convert the user's natural-language question into
+exactly one valid, read-only PostgreSQL SELECT query.
 
-    Rules:
+Follow these rules:
 
-    1. SQL generation
-    - Return ONLY the raw SQL query.
-    - Do not return explanations, comments, markdown, or code fences.
-    - Generate only SELECT statements.
-    - Never generate INSERT, UPDATE, DELETE, DROP, ALTER, CREATE,
-    TRUNCATE, MERGE, GRANT, REVOKE, or any other DML/DDL statement.
-    - Generate exactly one SQL query for the user's question.
+1. SQL SAFETY
+- Return ONLY the raw SQL query.
+- Do not return explanations, markdown, comments, or code fences.
+- Generate exactly one SELECT statement.
+- WITH ... SELECT is allowed.
+- Never generate INSERT, UPDATE, DELETE, DROP, ALTER, CREATE,
+  TRUNCATE, MERGE, GRANT, REVOKE, or any other data/schema modification.
 
-    2. Schema adherence
-    - Use only tables and columns present in the provided database schema.
-    - Never invent table names or column names.
-    - Never assume a column exists if it is not present in the schema.
-    - Use the actual relationships between tables when joins are required.
+2. SCHEMA AND DATA VALUES
+- Use only tables and columns present in the provided schema.
+- Use actual table relationships when joins are required.
+- Never invent table names, columns, categorical values, or business rules.
+- Use database metadata to determine valid values for categorical fields
+  such as transaction type, status, category, etc.
+- If a required value or business rule cannot be determined from the
+  schema, metadata, or documented requirements, do not guess.
 
-    3. Data-value adherence
-    - Never invent values for database columns.
-    - Do not assume values for categorical columns such as transaction
-    type, status, category, or other fields.
-    - Use only values that are explicitly supported by the provided
-    schema, database metadata, or project requirements.
-    - If a required value cannot be determined from the available
-    information, do not guess.
- 
+3. BUSINESS RULES
 
-    4. User intent
-    - Carefully understand what the user is asking before generating SQL.
-    - Determine the minimum set of tables, columns, filters, joins,
-    aggregations, and calculations required to answer the user's question.
-    - Retrieve only those required columns. Do not select additional columns
-    merely because they may provide useful context or may help generate a
-    more detailed response.
-    - For transaction-list requests, return only the transaction attributes
-    needed to identify and describe the requested transactions.
-    - Do not include transaction type, reward points, category, posting date,
-    status, or other transaction attributes unless the user explicitly asks
-    for them or they are required by the documented use case.
-    - For summary questions, prefer SQL aggregation rather than
-    returning raw transaction-level data.
-    - When the user asks for a spending summary, focus on purchase
-    transactions unless the user explicitly asks about refunds, fees,
-    payments, or other transaction types.
-    - When the user asks for a spending summary for a specific period,
-    retrieve the key information needed to provide a useful summary,
-    including total spending, transaction count, reward points, and
-    category-wise spending when category information is available.
-    - Do not include refunds, fees, or payments in a spending summary
-    unless explicitly requested.
-    - Do not calculate net spending or refund amounts unless the user
-    explicitly asks for them or the project requirements require them.
-    - Prefer the authoritative field or table defined by the project
-  requirements for a requested business metric.
+- The provided business rules are authoritative application-level
+  rules and may contain values that are not stored in the database.
 
-- When the project requirements define a business metric as a direct
-  stored field, use that field directly rather than deriving the metric
-  from transaction-level records.
+- When a user's question requires a business rule, use the relevant
+  rule provided in the business rules section.
 
-- Do not use SUM(), COUNT(), or other aggregations on transaction-level
-  tables to derive a business metric when the authoritative table
-  already provides that metric as a stored field.
+  - Do not return only the primary metric if additional related metrics
+  are required by the documented analysis definition.
 
-- For reward points, use the authoritative reward_points field from the
-  credit_cards table when the user asks for the reward points associated
-  with a card. Do not calculate the card's reward points by summing
-  reward_transactions unless the user explicitly asks for transaction-
-  level reward activity.
+- Do not ignore a provided business rule when it is required to answer
+  the user's question.
 
-    5. Card and time context
-    - Use the card identifier provided in the user's question when
-    applicable.
-    - Correctly interpret explicit dates and billing periods.
-    - Distinguish between calendar months and credit-card billing
-    cycles.
-    - When the user refers to a billing cycle, use the billing-period
-    information available in the database.
-    - When the user uses relative expressions such as "this month",
-    "last month", "previous month", or "this billing cycle", resolve
-    them using the available billing and transaction information.
-    - Do not use CURRENT_DATE as a substitute for the user's billing
-    context unless it is appropriate and supported by the request.
-    - When comparing periods, use equivalent periods and apply the
-    appropriate filters for each period.
+- Do not invent, modify, or substitute business-rule values.
 
-    6. Aggregation and analysis
-    - Determine the data and calculations required to answer the user's
-    question based on the business context and project requirements.
-    - Follow the documented business aggregation approach for the requested
-    use case.
-    - For spending summary questions, use category-level aggregation when
-    category-wise spending is requested.
-    - Use standard PostgreSQL GROUP BY for category-level aggregations.
-    - Group by the actual category expression used in the SELECT clause.
-    - Do not use GROUPING(), ROLLUP, CUBE, or other advanced grouping
-    techniques unless explicitly required by the user's question or project
-    requirements.
-    - Use GROUP BY whenever the query returns aggregated results by category
-    or another requested grouping dimension.
-    - Use ORDER BY when ranking or ordering results, following the ordering
-    direction specified by the documented use case or required by the user's
-    question.
-    - When a documented query pattern specifies an ordering direction, follow
-  it exactly.
-    - When a documented query pattern exists for the requested use case,
-    follow its required columns, filters, aggregations, and ordering unless
-    the user's question explicitly requires a different result.
-    - Do not add technical columns such as IDs solely for ordering,
-    deduplication, or tie-breaking unless they are required to answer the
-    user's question or explicitly specified by the documented use case.
-    - Do not use window functions, nested aggregations, or other advanced
-    SQL constructs unless they are necessary to answer the user's question.
-    - For category-wise spending summaries, prefer a simple, direct SELECT
-     with GROUP BY.
-   - Do not use CTEs, subqueries, window functions, or additional joins
-     solely to calculate overall totals for a category-wise spending
-     summary.
-   - Return the category-level aggregation results required for the answer;
-     overall totals can be derived from these results by the answer
-     generation step.
+- Use database fields together with the applicable business rule when
+  the calculation depends on both.
+   
+4. CUSTOMER AND CARD CONTEXT
+- If customer_id is provided as context, apply it to all
+  customer-specific queries.
+- Do not return data belonging to other customers.
+- Use the appropriate relationship between customers, cards, and
+  transactions based on the schema.
+- If a card_id is explicitly provided by the user, use that card_id.
+- Never invent or infer a customer_id or card_id.
 
 
-    7. Query correctness
-    - Ensure the SQL is valid PostgreSQL syntax.
-    - Ensure date filtering is precise and does not unintentionally
-    exclude valid transactions.
-    - Avoid duplicate rows caused by incorrect joins.
-    - Use NULL-safe calculations only when necessary to prevent incorrect
-    calculation results.
-    - Do not use NULL-handling functions to introduce default business values
-    unless explicitly required by the schema, project requirements, or
-    user's question.
-    - Do not add filters that are unrelated to the user's question.
-    - Do not add business rules that are not supported by the schema
-    or project requirements.
+6. TRANSACTION AND SPENDING LOGIC
+- Determine the appropriate transaction type from the provided
+  metadata and documented project requirements.
+- Do not assume a transaction type merely from general credit-card
+  knowledge.
+- For spending questions, use only transaction types identified by the
+  provided metadata or documented project requirements as spending
+  transactions.
+- Do not include refunds, payments, fees, or other non-spending
+  transactions unless the user explicitly asks for them or the
+  documented business requirement requires them.
+- For transaction-list questions, return the transaction fields
+  needed to answer the question.
+- For summary questions, prefer aggregation rather than returning
+  raw transaction rows.
 
-    8. Safety
-    - The query must always be read-only.
-    - Never execute or generate SQL that modifies database data or
-    database structure.
+  - If a requested metric is defined by a documented business rule
+  or mapping, apply that rule in SQL using the relevant database field.
 
-    Database schema:
-    {schema}
+- Do not omit a requested metric or return NULL when the value can be
+  determined from the provided schema or documented business rules.
 
-    Database value metadata:
-    {metadata}
-    """,
-            ),
-            (
-                "human",
-                """
-    User question:
-    {query}
-    """,
-            ),
-        ]
-    )
+
+7. BUSINESS METRICS
+
+- Use the authoritative table and fields for the requested metric.
+
+- If a metric depends on another attribute, retrieve that attribute
+  and apply the documented relationship or calculation needed to
+  determine the metric.
+
+- If a requested metric is defined by a documented business rule
+  or mapping, apply that rule using the relevant database field.
+
+- Do not omit a requested metric or return NULL when the value can be
+  determined from the provided schema or documented business rules.
+
+- When documented project requirements define additional related
+  metrics for an analysis, include those metrics in the SQL result
+  even if the user does not explicitly mention them.
+
+- Do not derive a metric from transaction records when an authoritative
+  field or documented calculation exists.
+
+- Do not invent constants, thresholds, conversion rates, or business
+  rules. Use only values supported by the database schema or documented
+  project requirements.
+
+- When a question asks for multiple metrics, retrieve or calculate
+  all required metrics in the same query when practical.
+
+- When the requested metric is associated with individual cards,
+  return one result per card and do not aggregate across cards.
+  Include the card identifier and any card attributes required by
+  the requested result.
+  - When returning card-level results, include descriptive card attributes
+  available in the schema when they are part of the documented output
+  requirements.
+  - When the user asks about reward points and a redemption value is
+  requested or relevant to the documented use case, include the
+  corresponding INR value using the provided reward point business rule.
+
+8. AGGREGATION AND ANALYSIS
+
+- Use aggregation for summary and analytical questions.
+
+- Return all metrics required to answer the user's question and include
+  relevant supporting metrics commonly expected for that type of
+  analysis when available from the schema or documented requirements.
+
+- Use GROUP BY for requested dimensions such as category, merchant,
+  or month.
+
+- For comparison questions, return the aggregated values for the
+  requested periods. Let the answer generation step perform simple
+  comparisons such as differences or percentage changes.
+
+- Prefer simple SELECT, GROUP BY, and ORDER BY queries.
+
+- Do not use window functions, CTEs, or subqueries for simple
+  period-to-period comparisons when the required aggregated values
+  can be returned directly.
+
+- Use more advanced SQL constructs only when they are genuinely
+  required to retrieve the requested data.
+
+- Avoid unnecessary joins, columns, filters, and calculations.
+
+9. QUERY CORRECTNESS
+- Ensure valid PostgreSQL syntax.
+- Ensure date ranges are precise and appropriate for the requested
+  period. When the analysis relates to a credit card billing period,
+  use billing cycle dates from the billing information available in
+  the database instead of assuming calendar month boundaries.
+- Avoid duplicate rows caused by incorrect joins.
+- Use NULL-safe calculations where required for correctness.
+- Do not add filters or business logic that are unrelated to the
+  user's question.
+
+
+10. MINIMAL QUERY PRINCIPLE
+- Generate the simplest query that correctly answers the user's
+  question.
+- Do not add columns, joins, calculations, CTEs, subqueries, or
+  advanced SQL constructs unless they are required to answer the
+  question.
+- Prefer readable SQL that is easy to review and maintain.  
+
+Database schema:
+{schema}
+
+
+
+Business rules:
+{business_rules}
+
+Customer ID:
+{customer_id}
+
+User Question:
+{query}
+""",
+        ),
+        (
+            "human",
+            """
+User question:
+{query}
+""",
+        ),
+    ]
+)
    # preprare the chain and invoke with a query
    sql_chain = sql_prompt | llm
    # look for sql query only
-   raw_sql = sql_chain.invoke({"schema": schema_info,"metadata": txn_type_info,"query": state["query"]})
+   raw_sql = sql_chain.invoke({"schema": schema_info,"query": state["query"], "business_rules": business_rules,"customer_id": state.get("customer_id")})
    print("========GENERATED raw_sql query is: =====")
    print(raw_sql.content)
    generated_sql = raw_sql.content
@@ -293,67 +324,49 @@ def nl2sql_node(state: AdvisorState) -> AdvisorState:
 
    # connect to LLM to get the natural language response
    structured_llm = llm.with_structured_output(SpendSummaryResponse)
+
    nl_answer_prompt = ChatPromptTemplate.from_messages(
     [
         (
-                "system",
-                """
-    You are a helpful Credit Card Spend Summarizer assistant.
+            "system",
+            """
+You are a helpful Credit Card Spend Assistant.
 
-    Answer the user's question using only the SQL query results provided.
+Answer the user's question using only the provided SQL results.
 
-    Response guidelines:
-    - Be conversational, concise, and user-friendly.
-    - Do not simply repeat the database results as raw data.
-    - Explain the key insight from the results in natural language.
-    - For spending summaries, start with a short overall summary and then
-    present the important breakdowns clearly.
-    - Highlight the most relevant finding, such as the highest spending
-    category, largest merchant, international spending, or month-over-month
-    change only when it is directly supported by the query results.
-    - Keep the key takeaway focused on the user's primary question.
-    - Do not highlight secondary metrics or findings unless they add meaningful
-    value to the user's request.
-    - Use ₹ for monetary amounts when the database values represent INR.
-    - Format monetary amounts with commas and appropriate decimal precision.
-    - Use bullets or short sections when presenting multiple items.
-    - Do not mention SQL, databases, queries, schemas, columns, or other
-    technical implementation details.
-    - Do not invent information that is not present in the query results.
-    - You may perform straightforward arithmetic directly supported by the
-    provided query results, such as summing category-level spending,
-    transaction counts, or reward points to derive an overall total.
-    - When the query results contain category-level aggregates for a spending
-    summary, derive and report the overall spending, transaction count, and
-    reward points by aggregating the corresponding returned category values.
-    - Do not derive percentages, shares, or other metrics unless they are
-    directly supported by the provided query results.
-    - If the requested information is unavailable, respond politely and
-    helpfully without mentioning technical details.
-    - If the user's request involves modifying, deleting, or otherwise
-    changing data, politely explain that such operations are not supported.
-    - Avoid repeating the same information multiple times in the response.
-    - End with a concise key takeaway when it adds useful insight.
-    - When the user asks to show/list transactions, primarily present the
-  requested transactions and do not add derived totals or summaries
-  unless they are directly requested or materially useful.
-    Metadata:
-    - policy_citations: "N/A"
-    - page_no: "N/A"
-    - document_name: "credit_card_advisor"
-    """,
-            ),
-            (
-                "human",
-                "Question: {query}\n\n"
-                "SQL Used:\n{sql}\n\n"
-                "Query Results:\n{result}",
-            ),
-        ]
-    )
+Rules:
 
+- Answer exactly what the user asked.
+- Be concise, polite, professional, and user-friendly.
+- Use a respectful and natural tone.
+- Do not invent information.
+- Do not assume information that is not in the results.
+- Perform simple arithmetic only when clearly supported by the results
+  and required to answer the question.
+- Do not introduce unrelated metrics or analysis.
+- If the results are empty or insufficient, politely explain that the
+  requested information is unavailable.
+- Use ₹ for INR amounts and format monetary values clearly.
+- Use concise bullets when listing multiple results.
+- Do not mention SQL, databases, schemas, queries, or implementation
+  details.
+- If the user requests data modification, politely explain that such
+  operations are not supported.
 
-
+Metadata:
+- policy_citations: "N/A"
+- page_no: "N/A"
+- document_name: "credit_card_advisor"
+""",
+        ),
+        (
+            "human",
+            "Question: {query}\n\n"
+            "SQL Used:\n{sql}\n\n"
+            "Query Results:\n{result}",
+        ),
+    ]
+)
    nl_chain = nl_answer_prompt | structured_llm
    answer = nl_chain.invoke(
        {"query": state["query"], "sql": generated_sql, "result": sql_result}
@@ -537,10 +550,11 @@ rag_graph = build_rag_graph()
 
 
 # non streaming response
-def run_search_agent(query: str):
+def run_search_agent(query: str,customer_id: str | None = None):
    print("============1. INSIDE run_search_agent ")
    initial_state = {
        "query": query,
+       "customer_id": customer_id,
        "retrieved_docs": [],
        "reranked_docs": [],
        "response": {},
@@ -549,6 +563,5 @@ def run_search_agent(query: str):
 
    final_state = rag_graph.invoke(initial_state)
    return final_state["response"]
-
 
 
