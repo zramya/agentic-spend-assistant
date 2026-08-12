@@ -7,16 +7,16 @@ router = APIRouter(prefix="/api/v1/query")
 
 
 
-
-
 @router.post("/")
 def query_endpoint(request: SpendSummaryRequest) -> SpendSummaryResponse:
-   docs = query_documents(
-    query=request.query,
-    customer_id=request.customer_id,
-)
-   return docs
 
+    docs = query_documents(
+        query=request.query,
+        customer_id=request.customer_id,
+        thread_id="default_thread"
+    )
+
+    return docs
 
 
 

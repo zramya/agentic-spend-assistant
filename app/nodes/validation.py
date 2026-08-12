@@ -1,3 +1,5 @@
+import ast
+
 from app.states.rag_state import AdvisorState
 from app.core.db import get_sql_database
 from app.core.llm import _get_llm
@@ -29,11 +31,17 @@ Query:
     return name
 
 
+import ast
+
+from app.states.rag_state import AdvisorState
+from app.core.db import get_sql_database
+
+
 def validate_request_node(state: AdvisorState) -> AdvisorState:
 
     print("========== 2. INSIDE validate_request_node ==========")
     print("QUERY:", state.get("query"))
-    print("CUSTOMER ID:", state.get("customer_id"))
+    print("CUSTOMER ID BEFORE:", state.get("customer_id"))
 
     db = get_sql_database()
 
@@ -41,58 +49,91 @@ def validate_request_node(state: AdvisorState) -> AdvisorState:
     customer_name = state.get("customer_name")
 
 
-    # Resolve customer from query when memory does not have customer_id
-    if not customer_id:
+    # -------------------------------------------------
+    # Step 1: Check if user mentioned a customer name
+    # If yes, always resolve and override memory
+    # -------------------------------------------------
 
-        try:
-            customer_name = extract_customer_name(
-                state.get("query", "")
-            )
+    extracted_name = None
 
-        except Exception as e:
-            print("Customer extraction failed:", e)
-            customer_name = None
+    try:
+        extracted_name = extract_customer_name(
+            state.get("query", "")
+        )
 
-
-        if customer_name:
-
-            result = db.run(
-                f"""
-                SELECT customer_id, full_name
-                FROM customers
-                WHERE LOWER(SPLIT_PART(full_name, ' ', 1))
-                      = LOWER('{customer_name}')
-                LIMIT 1;
-                """
-            )
+    except Exception as e:
+        print("Customer extraction failed:", e)
 
 
-            if not result:
+    if extracted_name:
 
-                return {
-                    **state,
-                    "validation_failed": True,
-                    "response": {
-                        "query": state["query"],
-                        "answer": (
-                            "I couldn't find your customer account. "
-                            "Please check your name or provide your customer ID."
-                        ),
-                        "policy_citations": "N/A",
-                        "page_no": "N/A",
-                        "document_name": "credit_card_advisor",
-                        "sql_query_executed": None,
-                    },
-                }
+        print("NAME FOUND IN QUERY:", extracted_name)
+
+        result = db.run(
+            f"""
+            SELECT customer_id, full_name
+            FROM customers
+            WHERE LOWER(SPLIT_PART(full_name, ' ', 1))
+                  = LOWER('{extracted_name}')
+            LIMIT 1;
+            """
+        )
+
+        print("CUSTOMER LOOKUP RESULT:", repr(result))
 
 
-            customer_id = result[0]["customer_id"]
-            customer_name = result[0]["full_name"]
+        if not result:
 
-            print("RESOLVED CUSTOMER ID:", customer_id)
+            return {
+                **state,
+                "validation_failed": True,
+                "response": {
+                    "query": state["query"],
+                    "answer": (
+                        "I couldn't find your customer account. "
+                        "Please check your name or provide your customer ID."
+                    ),
+                    "policy_citations": "N/A",
+                    "page_no": "N/A",
+                    "document_name": "credit_card_advisor",
+                    "sql_query_executed": None,
+                },
+            }
 
 
-    # Validate customer id
+        customer_rows = ast.literal_eval(result)
+
+        customer_id = customer_rows[0][0]
+        customer_name = customer_rows[0][1]
+
+
+        print("NEW CUSTOMER RESOLVED:")
+        print("CUSTOMER ID:", customer_id)
+        print("CUSTOMER NAME:", customer_name)
+
+
+
+    # -------------------------------------------------
+    # Step 2: No name in query
+    # Use existing memory customer_id
+    # -------------------------------------------------
+
+    else:
+
+        print("NO CUSTOMER NAME FOUND IN QUERY")
+
+        if customer_id:
+            print("USING MEMORY CUSTOMER ID:", customer_id)
+
+        else:
+            print("NO CUSTOMER CONTEXT AVAILABLE")
+
+
+
+    # -------------------------------------------------
+    # Step 3: Validate customer_id if available
+    # -------------------------------------------------
+
     if customer_id:
 
         result = db.run(
@@ -122,6 +163,7 @@ def validate_request_node(state: AdvisorState) -> AdvisorState:
                     "sql_query_executed": None,
                 },
             }
+
 
 
     print("FINAL CUSTOMER ID:", customer_id)

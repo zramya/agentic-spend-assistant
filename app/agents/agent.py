@@ -20,7 +20,9 @@ from app.core.db import get_sql_database
 from app.core.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
 from app.core.llm import  _get_llm
 
+from langgraph.checkpoint.memory import InMemorySaver
 
+memory = InMemorySaver()
 
 
 load_dotenv()
@@ -358,6 +360,7 @@ User question:
     # execute the generated sql query  to get the outout from RDMBS
    try:
         sql_result = db.run(generated_sql)
+        print("CUSTOMER LOOKUP RAW RESULT:", sql_result)
    except Exception as err:
         sql_result = f"Generated SQL execution error: {err}"
  
@@ -626,7 +629,9 @@ def build_rag_graph():
 
    workflow.add_edge("nl2sql", END)
 
-   search_agent = workflow.compile()
+   search_agent =workflow.compile(
+    checkpointer=memory
+)
 
 
    # generating and saving the graph visualization
@@ -646,21 +651,57 @@ rag_graph = build_rag_graph()
 
 
 
+def run_search_agent(
+    query: str,
+    customer_id: str | None = None,
+    thread_id: str = "default_thread"
+):
 
-# non streaming response
-def run_search_agent(query: str,customer_id: str | None = None):
-   print("============1. INSIDE run_search_agent ")
-   initial_state = {
-       "query": query,
-       "customer_id": customer_id,
-       "retrieved_docs": [],
-       "reranked_docs": [],
-       "response": {},
-       "validation_failed": False
-   }
+    print("============1. INSIDE run_search_agent")
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+
+    initial_state = {
+        "query": query,
+        "customer_id": customer_id,
+        "retrieved_docs": [],
+        "reranked_docs": [],
+        "response": {},
+        "validation_failed": False
+    }
 
 
-   final_state = rag_graph.invoke(initial_state)
-   return final_state["response"]
+    # Load previous memory
+    previous_state = rag_graph.get_state(config)
+
+    if previous_state.values:
+        initial_state["customer_id"] = (
+            previous_state.values.get("customer_id")
+        )
+
+        initial_state["customer_name"] = (
+            previous_state.values.get("customer_name")
+        )
 
 
+    print(
+        "STATE BEFORE INVOKE:",
+        initial_state
+    )
+
+
+    final_state = rag_graph.invoke(
+        initial_state,
+        config=config
+    )
+
+    print(
+        "========== FINAL STATE =========="
+    )
+    print(final_state)
+
+    return final_state["response"]
