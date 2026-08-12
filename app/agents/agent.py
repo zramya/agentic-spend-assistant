@@ -5,9 +5,10 @@
 
 
 import os
+from app.nodes.validation import validate_request_node
 import cohere
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+
 from langgraph.graph import StateGraph, END
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
@@ -17,6 +18,9 @@ from app.states.rag_state import AdvisorState
 from app.schemas.query_schema import SpendSummaryResponse
 from app.core.db import get_sql_database
 from app.core.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
+from app.core.llm import  _get_llm
+
+
 
 
 load_dotenv()
@@ -25,37 +29,34 @@ load_dotenv()
 MAX_SQL_RETRIES = 1
 
 
-def _get_llm():
-   return ChatOpenAI(
-       model=os.getenv("OPENAI_CHAT_MODEL"), api_key=os.getenv("OPENAI_API_KEY")
-   )
 
 
-def rephrase_query(query):
-    print("Inside Query",query)
-    llm = _get_llm()
 
-    prompt = f"""
-You are a query rewriting assistant.
+# def rephrase_query(query):
+#     print("Inside Query",query)
+#     llm = _get_llm()
 
-Rewrite the following user question into a clearer database query request.
+#     prompt = f"""
+# You are a query rewriting assistant.
 
-Rules:
-- Keep the same intent.
-- Do not add information.
-- Do not remove card IDs or customer IDs.
-- Do not mention Python classes, code, schema, or implementation.
-- Return ONLY the rewritten user question.
+# Rewrite the following user question into a clearer database query request.
 
-Original question:
-{query}
+# Rules:
+# - Keep the same intent.
+# - Do not add information.
+# - Do not remove card IDs or customer IDs.
+# - Do not mention Python classes, code, schema, or implementation.
+# - Return ONLY the rewritten user question.
 
-Rewritten question:
-"""
+# Original question:
+# {query}
 
-    response = llm.invoke(prompt)
+# Rewritten question:
+# """
 
-    return response.content.strip()
+#     response = llm.invoke(prompt)
+
+#     return response.content.strip()
 # class RouteDecision(BaseModel):
 #    route: Literal["VECTOR_DB", "RDBMS"]
 #    reason: str  # for debugging
@@ -189,14 +190,14 @@ Follow these rules:
   the calculation depends on both.
    
 4. CUSTOMER AND CARD CONTEXT
-- If customer_id is provided as context, apply it to all
-  customer-specific queries.
-- Do not return data belonging to other customers.
-- Use the appropriate relationship between customers, cards, and
-  transactions based on the schema.
-- If a card_id is explicitly provided by the user, use that card_id.
-- Never invent or infer a customer_id or card_id.
 
+- If customer_id is provided as context, apply it to customer-specific queries.
+- If card_id is explicitly provided by the user, use that exact card_id.
+- Never invent or infer customer_id or card_id.
+- For card-specific queries, distinguish between a nonexistent card and
+  an existing card with no transactions.
+- Never represent a nonexistent card as zero spend, zero transactions,
+  or zero reward points.
 
 6. TRANSACTION AND SPENDING LOGIC
 - Determine the appropriate transaction type from the provided
@@ -237,7 +238,8 @@ Follow these rules:
 
 - Do not omit a requested metric or return NULL when the value can be
   determined from the provided schema or documented business rules.
-
+- This does not apply when the requested card or customer does not exist;
+  in that case, return an explicit not-found indicator rather than zero.
 - When documented project requirements define additional related
   metrics for an analysis, include those metrics in the SQL result
   even if the user does not explicitly mention them.
@@ -346,50 +348,19 @@ User question:
 )
    # preprare the chain and invoke with a query
    sql_chain = sql_prompt | llm
-   retry_count = state.get("retry_count", 0)
-   query = state["query"]
-
-   while retry_count <= MAX_SQL_RETRIES:
-
-        raw_sql = sql_chain.invoke(
-            {
-                "schema": schema_info,
-                "query": query,
-                "business_rules": business_rules,
-                "customer_id": state.get("customer_id")
-            }
-        )
-
-        generated_sql = raw_sql.content
-
-
-        try:
-            sql_result = db.run(generated_sql)
-            print("SQL Result:")
-            print(sql_result)
-
-        except Exception as err:
-            sql_result = f"Generated SQL execution error: {err}"
-
-        invalid_result = (
-        sql_result is None
-        or "error" in str(sql_result).lower()
-    )
-
-        if not invalid_result:
-                  break
-
-
-        retry_count += 1
-
-        if retry_count <= MAX_SQL_RETRIES:
-            print("No valid result. Retrying...")
-
-            query = rephrase_query(query)
-        
-
-            print("Rephrased query:")
-            print(query)
+    # look for sql query only
+   raw_sql = sql_chain.invoke({"schema": schema_info,"query": state["query"], "business_rules": business_rules,"customer_id": state.get("customer_id")})
+   print("========GENERATED raw_sql query is: =====")
+   print(raw_sql.content)
+   generated_sql = raw_sql.content
+ 
+ 
+    # execute the generated sql query  to get the outout from RDMBS
+   try:
+        sql_result = db.run(generated_sql)
+   except Exception as err:
+        sql_result = f"Generated SQL execution error: {err}"
+ 
    # look for sql query only
   #  raw_sql = sql_chain.invoke({"schema": schema_info,"query": state["query"], "business_rules": business_rules,"customer_id": state.get("customer_id")})
   #  print("========GENERATED raw_sql query is: =====")
@@ -434,6 +405,10 @@ Rules:
   details.
 - If the user requests data modification, politely explain that such
   operations are not supported.
+  - If the SQL result indicates that the requested card or customer does not
+  exist, clearly and politely tell the user that it could not be found.
+- Do not report zero values for a nonexistent card or customer.
+- When appropriate, ask the user to verify the card ID or customer ID.
 
 Metadata:
 - policy_citations: "N/A"
@@ -507,15 +482,8 @@ Metadata:
 )
    nl_chain = nl_answer_prompt | structured_llm
    answer = nl_chain.invoke(
-      {
-          "query": query,
-          "sql": generated_sql,
-          "result": sql_result
-      }
-  )
-  #  answer = nl_chain.invoke(
-  #      {"query": state["query"], "sql": generated_sql, "result": sql_result}
-  #  )
+       {"query": state["query"], "sql": generated_sql, "result": sql_result}
+   )
    print("[nl2sql_node] Answer generated.")
    response = answer.model_dump()
    response["policy_citations"] = "N/A"
@@ -527,7 +495,6 @@ Metadata:
        "generated_sql": generated_sql,
        "sql_result": str(sql_result),
        "response": response,
-          "retry_count": retry_count
    }
 
 
@@ -644,35 +611,20 @@ def generate_answer_node(state: AdvisorState):
 
 def build_rag_graph():
    workflow = StateGraph(AdvisorState)
+   workflow.add_node("validate_request", validate_request_node)
    workflow.add_node("nl2sql", nl2sql_node)
-   workflow.set_entry_point("nl2sql")
+
+   workflow.set_entry_point("validate_request")
+   workflow.add_conditional_edges(
+    "validate_request",
+    lambda state: "END" if state.get("validation_failed") else "nl2sql",
+    {
+        "END": END,
+        "nl2sql": "nl2sql",
+    },
+)
+
    workflow.add_edge("nl2sql", END)
-
-
-
-#    workflow.add_node("router", router_node)
-#    workflow.add_node("nl2sql", nl2sql_node)
-# #    workflow.add_node("vector_search", vector_search_node)
-#    workflow.add_node("rerank", rerank_node)
-#    workflow.add_node("generate_answer", generate_answer_node)
-
-
-   # the following is the starting point
-#    workflow.set_entry_point("router")
-
-
-   # conditional routing: "vectordb" -> vector_search (or) "rdbms" -> nl2sql
-#    workflow.add_conditional_edges(
-#        "router",
-#        lambda state: state["route"],
-#        {"VECTOR_DB": "vector_search", "RDBMS": "nl2sql"},
-#    )
-
-
-#    workflow.add_edge("vector_search", "rerank")
-#    workflow.add_edge("rerank", "generate_answer")
-#    workflow.add_edge("generate_answer", END)
-
 
    search_agent = workflow.compile()
 
@@ -704,7 +656,7 @@ def run_search_agent(query: str,customer_id: str | None = None):
        "retrieved_docs": [],
        "reranked_docs": [],
        "response": {},
-         "retry_count": 0,
+       "validation_failed": False
    }
 
 
