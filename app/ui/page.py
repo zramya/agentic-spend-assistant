@@ -10,7 +10,6 @@ import re
 API_BASE_URL = "http://localhost:8000"
 
 UPLOAD_ENDPOINT = f"{API_BASE_URL}/api/v1/credit-card/ingestion"
-
 QUERY_ENDPOINT = f"{API_BASE_URL}/api/v1/credit-card/query"
 
 
@@ -21,8 +20,82 @@ QUERY_ENDPOINT = f"{API_BASE_URL}/api/v1/credit-card/query"
 st.set_page_config(
     page_title="NorthStar AI Spend Assistant",
     page_icon="💳",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="expanded",
+)
+
+
+# =============================================================================
+# Minimal / Clean UI Styling
+# =============================================================================
+
+st.markdown(
+    """
+<style>
+    /* -----------------------------------------------------------------
+       Main page - centered like the reference Regulatory UI
+       ----------------------------------------------------------------- */
+    .block-container {
+        max-width: 800px !important;
+        margin: 0 auto !important;
+        padding-top: 4rem !important;
+        padding-bottom: 6rem !important;
+    }
+
+    /* Keep the existing NorthStar heading, only align it */
+    h1 {
+        text-align: center !important;
+        font-size: 2rem !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    /* Existing subtitle */
+    .block-container > div > div > div > div:first-child p {
+        text-align: center;
+    }
+
+    /* -----------------------------------------------------------------
+       Sidebar - clean, compact, reference-style
+       ----------------------------------------------------------------- */
+    section[data-testid="stSidebar"] {
+        width: 300px !important;
+    }
+
+    section[data-testid="stSidebar"] > div {
+        padding: 3.5rem 1.25rem 1.5rem 1.25rem !important;
+    }
+
+    section[data-testid="stSidebar"] .stFileUploader {
+        margin-top: 0.25rem;
+        margin-bottom: 0.5rem;
+    }
+
+    section[data-testid="stSidebar"] button {
+        border-radius: 8px !important;
+    }
+
+    /* -----------------------------------------------------------------
+       Chat input - same 800px alignment as the main content
+       ----------------------------------------------------------------- */
+    div[data-testid="stBottomBlockContainer"] {
+        width: 100% !important;
+    }
+
+    div[data-testid="stBottomBlockContainer"] > div {
+        width: 800px !important;
+        max-width: calc(100% - 2rem) !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    div[data-testid="stChatInput"] {
+        width: 100% !important;
+        max-width: 800px !important;
+        margin: 0 auto !important;
+    }
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
 
@@ -86,7 +159,7 @@ def handle_personal_conversation(message: str):
 
             return (
                 f"Hi {name}! 👋 "
-                "Welcome to your NorthStar Spend Assistant. "
+                "Welcome to your Credit Card Spend Summarizer. "
                 "How can I help you understand your spending, rewards, or card benefits today?"
             )
 
@@ -111,7 +184,7 @@ def handle_personal_conversation(message: str):
 
             return (
                 f"Hi {st.session_state.user_name}! 👋 "
-                "Welcome to your NorthStar Spend Assistant. "
+                "Welcome to your Credit card Spend Assistant. "
                 "How can I help you understand your spending, rewards, or card benefits today?"
             )
 
@@ -184,62 +257,32 @@ def add_message(role: str, content: str):
 
 
 # =============================================================================
-# Header
-# =============================================================================
-
-st.title("💳 NorthStar AI Spend Assistant")
-
-st.caption("Multimodal RAG • Credit Card Spend Intelligence • LangGraph")
-
-st.markdown("""
-    Ask questions about **credit-card spending, rewards, fees,
-    benefits, transactions and NorthStar card rules**.
-    """)
-
-
-# =============================================================================
-# Sidebar
+# Sidebar - Upload + Previous Chat History
 # =============================================================================
 
 with st.sidebar:
 
     # -------------------------------------------------------------------------
-    # Application
+    # Ingestion Upload
     # -------------------------------------------------------------------------
 
-    st.header("💳 NorthStar AI")
-
-    st.caption("Credit Card Spend Intelligence")
-
-    st.divider()
-
-    # -------------------------------------------------------------------------
-    # Knowledge Base Ingestion
-    # -------------------------------------------------------------------------
-
-    st.subheader("📚 Knowledge Base")
-
-    st.caption(
-        "Upload the NorthStar Credit Card Product Guide "
-        "to create the multimodal RAG knowledge base."
-    )
+    st.markdown("📤 Ingestion")
 
     uploaded_file = st.file_uploader(
-        "Choose a PDF",
+        "Choose a PDF file",
         type=["pdf"],
         help=(
             "Upload the NorthStar Credit Card Product Guide. "
-            "The document will be parsed into text, tables and "
-            "images, followed by embedding generation."
+            "The document will be parsed and indexed."
         ),
     )
 
     if uploaded_file is not None:
 
-        st.write(f"📄 **{uploaded_file.name}**")
+        st.caption(f"📄 {uploaded_file.name}")
 
         if st.button(
-            "🚀 Ingest Document",
+            "Upload",
             type="primary",
             use_container_width=True,
         ):
@@ -252,7 +295,7 @@ with st.sidebar:
                 )
             }
 
-            with st.spinner("Processing document and creating embeddings..."):
+            with st.spinner("Processing document..."):
 
                 try:
 
@@ -267,266 +310,34 @@ with st.sidebar:
                         data = response.json()
 
                         st.session_state.ingestion_result = data.get("data", {})
-
                         st.session_state.last_uploaded = uploaded_file.name
 
                         st.success("Document ingested successfully.")
 
                     else:
 
-                        st.error(f"Ingestion failed " f"({response.status_code})")
-
+                        st.error(f"Ingestion failed ({response.status_code})")
                         st.code(response.text)
 
                 except requests.exceptions.Timeout:
 
                     st.error(
                         "The ingestion request timed out. "
-                        "The document may still require additional "
-                        "processing time."
+                        "The document may still require additional processing time."
                     )
 
                 except requests.exceptions.RequestException as e:
 
                     st.error("Unable to connect to the backend.")
-
                     st.code(str(e))
 
-    # -------------------------------------------------------------------------
-    # Knowledge Base Status
-    # -------------------------------------------------------------------------
-
-    if st.session_state.ingestion_result:
-
-        result = st.session_state.ingestion_result
-
-        st.divider()
-
-        st.subheader("🔎 Knowledge Base Status")
-
-        ingestion_status = result.get(
-            "status",
-            "unknown",
-        )
-
-        if ingestion_status == "success":
-
-            st.success("Knowledge base ready")
-
-        else:
-
-            st.warning(str(ingestion_status))
-
-        # ---------------------------------------------------------------------
-        # Chunk Metrics
-        # ---------------------------------------------------------------------
-
-        chunks = result.get(
-            "chunks_ingested",
-            0,
-        )
-
-        st.metric(
-            "🧩 Total Chunks",
-            chunks,
-        )
-
-        # Current ingestion API returns the total number of chunks.
-        # Detailed modality counts can be added later to the API response.
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.metric(
-                "🔢 Embeddings",
-                chunks,
-            )
-
-        with col2:
-
-            st.metric(
-                "📐 Dimensions",
-                "1536",
-            )
-
-        doc_id = result.get("doc_id")
-
-        if doc_id:
-
-            st.caption(f"Document ID: `{doc_id}`")
-
-    # -------------------------------------------------------------------------
-    # Architecture
-    # -------------------------------------------------------------------------
-
-    st.divider()
-
-    st.subheader("⚙️ AI Pipeline")
-
-    st.markdown("""
-        **Multimodal Ingestion**
-        
-        📄 PDF  
-        ↓  
-        🔍 Docling  
-        ↓  
-        📝 Text + 📊 Tables + 🖼 Images  
-        ↓  
-        🔢 Embeddings  
-        ↓  
-        🗄️ PostgreSQL + pgvector  
-        
-        **Query Pipeline**
-        
-        💬 User Query  
-        ↓  
-        🧠 LangGraph  
-        ↓  
-        🔎 Vector Search + SQL  
-        ↓  
-        🤖 LLM Response
-        """)
-
-    # -------------------------------------------------------------------------
-    # Recent Questions
-    # -------------------------------------------------------------------------
-
-    if st.session_state.messages:
-
-        st.divider()
-
-        st.subheader("💬 Recent Questions")
-
-        user_questions = [
-            message["content"]
-            for message in st.session_state.messages
-            if message["role"] == "user"
-        ]
-
-        for index, question in enumerate(reversed(user_questions[-5:])):
-
-            display_question = question
-
-            if len(display_question) > 45:
-
-                display_question = display_question[:42] + "..."
-
-            if st.button(
-                display_question,
-                key=f"previous_question_{index}",
-                use_container_width=True,
-                help=question,
-            ):
-
-                st.session_state.selected_question = question
-
-                st.rerun()
-
-
 # =============================================================================
-# Main: Knowledge Base Overview
+# Main Header
 # =============================================================================
 
-if st.session_state.ingestion_result:
+st.title("💳 Credit Card Spend Summarizer")
 
-    result = st.session_state.ingestion_result
-
-    st.subheader("🧠 Multimodal Knowledge Base")
-
-    metric1, metric2, metric3, metric4 = st.columns(4)
-
-    with metric1:
-
-        st.metric(
-            "📄 Document",
-            "Ready",
-        )
-
-    with metric2:
-
-        st.metric(
-            "🧩 Chunks",
-            result.get(
-                "chunks_ingested",
-                0,
-            ),
-        )
-
-    with metric3:
-
-        st.metric(
-            "🔢 Embeddings",
-            result.get(
-                "chunks_ingested",
-                0,
-            ),
-        )
-
-    with metric4:
-
-        st.metric(
-            "📐 Vector Size",
-            "1536",
-        )
-
-    st.caption(
-        "The NorthStar product guide is represented as "
-        "embedded text, table and image knowledge for "
-        "semantic retrieval."
-    )
-
-    st.divider()
-
-
-# =============================================================================
-# Suggested Questions
-# =============================================================================
-
-if not st.session_state.messages:
-
-    st.subheader("💡 Try asking")
-
-    suggestion_col1, suggestion_col2 = st.columns(2)
-
-    with suggestion_col1:
-
-        if st.button(
-            "📊 Summarize my March spending",
-            use_container_width=True,
-        ):
-
-            st.session_state.selected_question = "Summarize my March spending"
-
-            st.rerun()
-
-        if st.button(
-            "⭐ How are reward points calculated?",
-            use_container_width=True,
-        ):
-
-            st.session_state.selected_question = "How are reward points calculated?"
-
-            st.rerun()
-
-    with suggestion_col2:
-
-        if st.button(
-            "💰 What are the card fees?",
-            use_container_width=True,
-        ):
-
-            st.session_state.selected_question = "What are the card fees?"
-
-            st.rerun()
-
-        if st.button(
-            "✈️ What is the foreign currency markup?",
-            use_container_width=True,
-        ):
-
-            st.session_state.selected_question = "What is the foreign currency markup?"
-
-            st.rerun()
+st.caption("Ask about spending, rewards, fees, benefits and card rules.")
 
 
 # =============================================================================
@@ -536,7 +347,6 @@ if not st.session_state.messages:
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
-
         st.markdown(message["content"])
 
 
@@ -544,9 +354,9 @@ for message in st.session_state.messages:
 # Determine Current Prompt
 # =============================================================================
 
-prompt = st.chat_input("Ask about spending, rewards, fees, benefits or card rules...")
+prompt = st.chat_input("Ask about spends, rewards, fees, benefits and card rules..")
 
-# Allow sidebar/suggestion buttons to populate the chat.
+# Allow sidebar previous-question buttons to populate the chat.
 if not prompt and "selected_question" in st.session_state:
 
     prompt = st.session_state.selected_question
@@ -593,105 +403,122 @@ if prompt:
             personal_response,
         )
 
-        st.stop()
+    else:
 
-    # -------------------------------------------------------------------------
-    # Actual Credit Card / RAG Question
-    # -------------------------------------------------------------------------
+        # ---------------------------------------------------------------------
+        # Actual Credit Card / RAG Question
+        # ---------------------------------------------------------------------
 
-    with st.chat_message("assistant"):
+        with st.chat_message("assistant"):
 
-        message_placeholder = st.empty()
+            message_placeholder = st.empty()
 
-        with st.spinner("Analyzing your request..."):
+            with st.spinner("Analyzing your request..."):
 
-            try:
+                try:
 
-                payload = {
-                    "query": prompt,
-                    "thread_id": st.session_state.thread_id,
-                    "chat_history": st.session_state.messages,
-                }
+                    payload = {
+                        "query": prompt,
+                        "thread_id": st.session_state.thread_id,
+                        "chat_history": st.session_state.messages,
+                    }
 
-                response = requests.post(
-                    QUERY_ENDPOINT,
-                    json=payload,
-                    timeout=120,
-                )
-
-                # -----------------------------------------------------------------
-                # Successful response
-                # -----------------------------------------------------------------
-
-                if response.status_code == 200:
-
-                    data = response.json()
-
-                    answer = data.get(
-                        "answer",
-                        "No answer available.",
+                    response = requests.post(
+                        QUERY_ENDPOINT,
+                        json=payload,
+                        timeout=120,
                     )
 
-                    # -------------------------------------------------------------
-                    # Display Answer
-                    # -------------------------------------------------------------
+                    # -----------------------------------------------------------------
+                    # Successful response
+                    # -----------------------------------------------------------------
 
-                    message_placeholder.markdown(answer)
+                    if response.status_code == 200:
 
-                    # -------------------------------------------------------------
-                    # Optional citations
-                    # -------------------------------------------------------------
+                        data = response.json()
 
-                    citations = data.get(
-                        "citations",
-                        [],
-                    )
+                        answer = data.get(
+                            "answer",
+                            "No answer available.",
+                        )
 
-                    if citations:
+                        # -------------------------------------------------------------
+                        # Display Answer
+                        # -------------------------------------------------------------
 
-                        with st.expander("📚 Sources / Retrieved Knowledge"):
+                        message_placeholder.markdown(answer)
 
-                            for index, citation in enumerate(
-                                citations,
-                                start=1,
-                            ):
+                        # -------------------------------------------------------------
+                        # Optional citations
+                        # -------------------------------------------------------------
 
-                                st.markdown(f"**{index}.** {citation}")
+                        citations = data.get(
+                            "citations",
+                            [],
+                        )
 
-                    # -------------------------------------------------------------
-                    # Optional metadata
-                    # -------------------------------------------------------------
+                        if citations:
 
-                    retrieval_info = data.get(
-                        "retrieval",
-                        None,
-                    )
+                            with st.expander("📚 Sources / Retrieved Knowledge"):
 
-                    if retrieval_info:
+                                for index, citation in enumerate(
+                                    citations,
+                                    start=1,
+                                ):
 
-                        with st.expander("🔎 Retrieval Details"):
+                                    st.markdown(f"**{index}.** {citation}")
 
-                            st.json(retrieval_info)
+                        # -------------------------------------------------------------
+                        # Optional metadata
+                        # -------------------------------------------------------------
 
-                    # -------------------------------------------------------------
-                    # Save assistant response
-                    # -------------------------------------------------------------
+                        retrieval_info = data.get(
+                            "retrieval",
+                            None,
+                        )
 
-                    add_message(
-                        "assistant",
-                        answer,
-                    )
+                        if retrieval_info:
 
-                # -----------------------------------------------------------------
-                # Backend error
-                # -----------------------------------------------------------------
+                            with st.expander("🔎 Retrieval Details"):
 
-                else:
+                                st.json(retrieval_info)
+
+                        # -------------------------------------------------------------
+                        # Save assistant response
+                        # -------------------------------------------------------------
+
+                        add_message(
+                            "assistant",
+                            answer,
+                        )
+
+                    # -----------------------------------------------------------------
+                    # Backend error
+                    # -----------------------------------------------------------------
+
+                    else:
+
+                        error_msg = (
+                            f"Backend error "
+                            f"({response.status_code})\n\n"
+                            f"{response.text}"
+                        )
+
+                        message_placeholder.error(error_msg)
+
+                        add_message(
+                            "assistant",
+                            error_msg,
+                        )
+
+                # ---------------------------------------------------------------------
+                # Connection error
+                # ---------------------------------------------------------------------
+
+                except requests.exceptions.Timeout:
 
                     error_msg = (
-                        f"Backend error "
-                        f"({response.status_code})\n\n"
-                        f"{response.text}"
+                        "The request took too long to complete. " "Please try again."
                     )
 
                     message_placeholder.error(error_msg)
@@ -701,32 +528,52 @@ if prompt:
                         error_msg,
                     )
 
-            # ---------------------------------------------------------------------
-            # Connection error
-            # ---------------------------------------------------------------------
+                except requests.exceptions.RequestException as e:
 
-            except requests.exceptions.Timeout:
+                    error_msg = "Unable to connect to the backend. \n \n"
+                    print(f"{e}")
 
-                error_msg = (
-                    "The request took too long to complete. " "Please try again."
-                )
+                    message_placeholder.error(error_msg)
 
-                message_placeholder.error(error_msg)
+                    add_message(
+                        "assistant",
+                        error_msg,
+                    )
 
-                add_message(
-                    "assistant",
-                    error_msg,
-                )
+# =============================================================================
+# Previous Chat
+# =============================================================================
+# Render after prompt processing so the latest submitted question is already
+# present in session_state during this same Streamlit run.
 
-            except requests.exceptions.RequestException as e:
+with st.sidebar:
 
-                error_msg = (
-                    "Unable to connect to the NorthStar " "AI backend.\n\n" f"{e}"
-                )
+    st.divider()
+    st.markdown("#### 💬 Previous Chat")
 
-                message_placeholder.error(error_msg)
+    user_questions = [
+        message["content"]
+        for message in st.session_state.messages
+        if message["role"] == "user"
+    ]
 
-                add_message(
-                    "assistant",
-                    error_msg,
-                )
+    if user_questions:
+
+        for index, question in enumerate(reversed(user_questions[-10:])):
+
+            display_question = question
+
+            if len(display_question) > 70:
+                display_question = display_question[:67] + "..."
+
+            if st.button(
+                display_question,
+                key=f"previous_question_{index}",
+                use_container_width=True,
+                help=question,
+            ):
+                st.session_state.selected_question = question
+                st.rerun()
+
+    else:
+        st.caption("Your previous questions will appear here.")
