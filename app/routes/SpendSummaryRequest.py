@@ -1,3 +1,4 @@
+from app.tools.document_serach import search_fts
 from fastapi import APIRouter
 from app.schemas.query_schema import SpendSummaryRequest, SpendSummaryResponse
 from app.services.query_service import query_documents
@@ -17,6 +18,20 @@ def query_endpoint(request: SpendSummaryRequest) -> SpendSummaryResponse:
     )
 
     return docs
+
+
+
+
+@router.post("/fts-search")
+def fts_search_api(query: str):
+
+    result = search_fts.invoke(
+        {
+            "query": query
+        }
+    )
+
+    return result
 
 
 

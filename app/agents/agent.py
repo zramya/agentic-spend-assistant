@@ -6,7 +6,7 @@
 
 import os
 from app.nodes.validation import validate_request_node
-from app.tools.vector_search_tool import vector_search_node
+from app.tools.document_serach import vector_search_node
 import cohere
 from dotenv import load_dotenv
 
