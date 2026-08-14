@@ -104,78 +104,125 @@ def vector_search(query: str, k: int = 5):
 # @tool
 def hybrid_search(query: str, k: int = 5):
     """
-    Hybrid Search combining Semantic Vector Search and PostgreSQL
-    Full Text Search.
+    Hybrid Search combining:
 
-    Use this tool when the query requires both:
-    - Semantic understanding of the user's intent
-    - Exact keyword matching from documents
+    1. Semantic Vector Search
+    2. PostgreSQL Full Text Search
 
-    This improves retrieval accuracy by combining:
-    1. Vector similarity search for contextual matches.
-    2. Full Text Search for exact term matches.
-
-    Returns a combined ranked list of relevant document chunks.
+    Results are combined using Reciprocal Rank Fusion (RRF).
     """
 
     print("============= INSIDE HYBRID SEARCH ===============")
+    print("HYBRID QUERY:", repr(query))
+
+    # --------------------------------------------------
+    # 1. Vector Search
+    # --------------------------------------------------
     vector_results = vector_search(
         query,
         k=10
     )
-    print("VECTOR RESULTS")
+
+    print("VECTOR RESULT COUNT:", len(vector_results))
+    print("VECTOR RESULTS:")
     print(vector_results)
 
+    # --------------------------------------------------
+    # 2. Full Text Search
+    # --------------------------------------------------
     fts_results = fts_search(
         query,
         k=10
     )
-    print("FTS RESULTS")
+
+    print("FTS RESULT COUNT:", len(fts_results))
+    print("FTS RESULTS:")
     print(fts_results)
 
-
+    # --------------------------------------------------
+    # 3. Reciprocal Rank Fusion
+    # --------------------------------------------------
+    rrf_scores = {}
     combined = {}
 
-    # Add vector results
-    for doc in vector_results:
+    # RRF constant
+    rrf_k = 60
+
+    # --------------------------------------------------
+    # 3a. Add Vector Results
+    # --------------------------------------------------
+    for rank, doc in enumerate(vector_results, start=1):
 
         key = doc["content"]
+
+        rrf_scores[key] = (
+            rrf_scores.get(key, 0)
+            + 1 / (rrf_k + rank)
+        )
 
         combined[key] = {
             **doc,
-            "hybrid_score": doc["score"]
+            "source": "vector"
         }
 
-
-    # Add FTS results
-    for doc in fts_results:
+    # --------------------------------------------------
+    # 3b. Add FTS Results
+    # --------------------------------------------------
+    for rank, doc in enumerate(fts_results, start=1):
 
         key = doc["content"]
 
+        rrf_scores[key] = (
+            rrf_scores.get(key, 0)
+            + 1 / (rrf_k + rank)
+        )
+
         if key in combined:
 
-            # document found by both searches
-            combined[key]["hybrid_score"] += doc["fts_rank"]
-
+            # Document found by both searches
             combined[key]["source"] = "both"
 
         else:
 
             combined[key] = {
                 **doc,
-                "hybrid_score": doc["fts_rank"]
+                "source": "fts"
             }
 
+    # --------------------------------------------------
+    # 4. Attach final RRF score
+    # --------------------------------------------------
+    for key, score in rrf_scores.items():
 
+        combined[key]["hybrid_score"] = round(score, 6)
+
+    # --------------------------------------------------
+    # 5. Sort by Hybrid Score
+    # --------------------------------------------------
     results = sorted(
         combined.values(),
         key=lambda x: x["hybrid_score"],
         reverse=True
     )
 
+    # --------------------------------------------------
+    # 6. Debug Final Results
+    # --------------------------------------------------
+    print("========== FINAL HYBRID RESULTS ==========")
 
+    for i, result in enumerate(results[:k], start=1):
+
+        print(
+            f"{i}. "
+            f"score={result.get('hybrid_score')} | "
+            f"source={result.get('source')} | "
+            f"section={result['citation'].get('section')}"
+        )
+
+    # --------------------------------------------------
+    # 7. Return Top K
+    # --------------------------------------------------
     return results[:k]
-
 
 
 # @tool
@@ -183,27 +230,25 @@ def fts_search(query: str, k: int = 5):
     """
     PostgreSQL Full Text Search over document chunks.
 
-    Use this tool for queries requiring exact keyword matching, such as:
-    - Specific terms
-    - Section names
-    - Document references
-    - Identifiers or phrases
-
-    This search is optimized for finding exact words and phrases
-    stored in the documents.
-
-    Returns matching document chunks with relevance scores and metadata.
+    Uses PostgreSQL's English text search configuration to convert
+    the natural-language query into searchable terms and retrieve
+    relevant document chunks.
     """
 
-   
-    print("============== INSIDE FTS SEARCH ==============")
-
+    # Convert the natural-language query into a PostgreSQL tsquery.
+    # Example:
+    # "What is the charge for a duplicate statement?"
+    #        ↓
+    # "'duplic' & 'statement'"
+    #
+    # websearch_to_tsquery() handles natural-language input and
+    # stemming automatically.
     sql = """
         SELECT
-    content,
-    page_number,
-    section,
-    source_file,
+            content,
+            page_number,
+            section,
+            source_file,
             ts_rank(
                 to_tsvector('english', content),
                 websearch_to_tsquery('english', %(query)s)
@@ -212,7 +257,7 @@ def fts_search(query: str, k: int = 5):
         FROM multimodal_chunks
 
         WHERE to_tsvector('english', content)
-      @@ websearch_to_tsquery('english', %(query)s)
+              @@ websearch_to_tsquery('english', %(query)s)
 
         ORDER BY fts_rank DESC
 
@@ -247,7 +292,10 @@ def fts_search(query: str, k: int = 5):
                     "section": row["section"],
                     "source_file": row["source_file"],
                 },
-                "fts_rank": round(float(row["fts_rank"]), 4),
+                "fts_rank": round(
+                    float(row["fts_rank"]),
+                    4
+                ),
             }
         )
 

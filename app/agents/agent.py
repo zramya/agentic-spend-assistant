@@ -60,56 +60,62 @@ MAX_SQL_RETRIES = 1
 #     response = llm.invoke(prompt)
 
 #     return response.content.strip()
-# class RouteDecision(BaseModel):
-#    route: Literal["VECTOR_DB", "RDBMS"]
-#    reason: str  # for debugging
+class RouteDecision(BaseModel):
+   route: Literal["VECTOR_DB", "RDBMS"]
+   reason: str  # for debugging
 
 
 
 
-# def router_node(state: AdvisorState) -> AdvisorState:
-#    llm = _get_llm()
-#    structured_llm = llm.with_structured_output(RouteDecision)
+def router_node(state: AdvisorState) -> AdvisorState:
+   llm = _get_llm()
+   structured_llm = llm.with_structured_output(RouteDecision)
 
 
-#    prompt = ChatPromptTemplate.from_messages(
-#        [
-#            (
-#                "system",
-#                """
-#                       You are a query router for an Agentic RAG System.
-#                       Classify the user's query into EXACTLY one of the following routes: 
-                     
-#                       'VECTOR_DB' -  the auery asks about policies, procedures, guides, guidelines,
-#                       regulations, or any topic that requires reading text documents
+   prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are a query router for a credit card spend summarizer.
+
+Classify the user's query into EXACTLY one route:
+
+RDBMS:
+Use this route when answering the query requires actual
+customer-specific or transaction-specific data stored in PostgreSQL,
+such as card transactions, spending, billing, account data,
+or reward points.
+
+DOCUMENT:
+Use this route when answering the query requires information
+from the credit card knowledge base, such as fees, charges,
+card features, benefits, policies, limits, reward rules,
+or general explanations and procedures.
+
+Important:
+- Customer/transaction data -> RDBMS
+- General credit-card knowledge/policy -> DOCUMENT
+- Return exactly one route: RDBMS or DOCUMENT.
+- Provide a short reason.
+            """,
+        ),
+        (
+            "human",
+            """
+Question:
+{query}
+            """,
+        ),
+    ]
+)
+
+   chain = prompt | structured_llm
+   decision = chain.invoke({"query": state["query"]})
+   print(f"[router_node's decision]: {decision.route} and reason: {decision.reason}")
 
 
-#                       'RBDMS - the query asks about products, product prices, stock/inventory,
-#                       product categories, customer orders, order items, or anything answerable
-#                       from a structrured e-commerce database tables:
-#                       products, categories, orders, order_items
-
-
-#                       Reply with the route and one sentence of reason.
-#                    """,
-#            ),
-#            (
-#                "human",
-#                """
-#                    Question:
-#                    {query}
-#                 """,
-#            ),
-#        ]
-#    )
-
-
-#    chain = prompt | structured_llm
-#    decision = chain.invoke({"query": state["query"]})
-#    print(f"[router_node's decision]: {decision.route} and reason: {decision.reason}")
-
-
-#    return {**state, "route": decision.route}
+   return {**state, "route": decision.route}
 
    # - Never invent transaction type values or other categorical values.
     # - Do not use transaction types based on general credit-card knowledge.
