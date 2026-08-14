@@ -6,7 +6,7 @@
 
 import os
 from app.nodes.validation import validate_request_node
-from app.tools.vector_search_tool import vector_search_node
+from app.tools.document_serach import vector_search
 import cohere
 from dotenv import load_dotenv
 
@@ -628,7 +628,7 @@ def build_rag_graph():
 
     workflow.add_node(
         "vector_search",
-        vector_search_node
+        vector_search
     )
 
     workflow.set_entry_point(

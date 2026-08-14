@@ -1,3 +1,4 @@
+from app.tools.document_serach import fts_search, hybrid_search,vector_search
 from fastapi import APIRouter
 from app.schemas.query_schema import SpendSummaryRequest, SpendSummaryResponse
 from app.services.query_service import query_documents
@@ -19,4 +20,39 @@ def query_endpoint(request: SpendSummaryRequest) -> SpendSummaryResponse:
     return docs
 
 
+@router.post("/vector-search")
+def vector_search_endpoint(
+    request: SpendSummaryRequest
+):
+    results = vector_search(request.query)
 
+    return {
+        "results": results
+    }
+
+
+@router.post("/fts-search")
+def fts_search_api(request: SpendSummaryRequest):
+    result = fts_search(
+        request.query,
+        k=5
+    )
+
+    return {
+        "results": result
+    }
+
+
+@router.post("/hybrid-search")
+def hybrid_search_endpoint(
+    request: SpendSummaryRequest
+):
+
+    results = hybrid_search(
+        request.query,
+        k=5
+    )
+
+    return {
+        "results": results
+    }
