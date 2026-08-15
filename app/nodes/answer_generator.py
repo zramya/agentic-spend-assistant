@@ -8,32 +8,43 @@ def answer_generator_node(state: AdvisorState) -> AdvisorState:
 
     print("============== INSIDE ANSWER GENERATOR ==============")
 
-    docs = state.get("reranked_docs", [])
-
-
     # --------------------------------------------------
-    # Prepare context from reranked documents
-    # --------------------------------------------------
+# Prepare context
+# --------------------------------------------------
 
-    context = "\n\n".join(
-        [
-            f"""
-Document:
-{doc.get('citation', {}).get('source_file')}
+    if state.get("route") == "RDBMS":
 
-Page:
-{doc.get('citation', {}).get('page_number')}
+        context = f"""
+    Database Result:
 
-Section:
-{doc.get('citation', {}).get('section')}
+    {state.get("sql_result", "")}
+    """
 
-Content:
-{doc.get('content')}
-"""
-            for doc in docs
-        ]
-    )
+        docs = []
 
+    else:
+
+        docs = state.get("reranked_docs", [])
+
+
+        context = "\n\n".join(
+            [
+                f"""
+    Document:
+    {doc.get('citation', {}).get('source_file')}
+
+    Page:
+    {doc.get('citation', {}).get('page_number')}
+
+    Section:
+    {doc.get('citation', {}).get('section')}
+
+    Content:
+    {doc.get('content')}
+    """
+                for doc in docs
+            ]
+        )
 
     # --------------------------------------------------
     # Generate answer

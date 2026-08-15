@@ -536,7 +536,10 @@ def build_rag_graph():
         answer_generator_node
     )
 
-
+    workflow.add_node(
+    "nl2sql",
+    nl2sql_node
+)
     # -----------------------------
     # Entry
     # -----------------------------
@@ -581,7 +584,7 @@ def build_rag_graph():
             "DOCUMENT": "document_router",
 
             # SQL not added yet
-            "RDBMS": END
+            "RDBMS": "nl2sql"
         }
     )
 
@@ -639,6 +642,10 @@ def build_rag_graph():
         "answer_generator"
     )
 
+    workflow.add_edge(
+    "nl2sql",
+    "answer_generator"
+)
 
     workflow.add_edge(
         "answer_generator",
