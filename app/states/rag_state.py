@@ -18,6 +18,7 @@ class AdvisorState(TypedDict):
    customer_name: str | None
    validation_failed: bool
    route_reason: str
+   prompt_decision: str
 
 
 

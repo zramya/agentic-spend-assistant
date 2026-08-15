@@ -5,6 +5,7 @@
 
 
 import os
+from app.evaluator.prompt_evaluator import clarify_node, prompt_review_node
 from app.nodes.answer_generator import answer_generator_node
 from app.nodes.validation import validate_request_node
 from app.tools.document_serach import fts_search_node, hybrid_search_node, vector_search, vector_search_node
@@ -24,6 +25,7 @@ from app.core.llm import  _get_llm
 from app.nodes.reranker import rerank_node
 from app.agents.main_router import router_node
 from app.agents.document_router import document_router_node
+
 
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -498,38 +500,52 @@ def build_rag_graph():
 
 
     # -----------------------------
-    # Nodes
-    # -----------------------------
+        # Nodes
+        # -----------------------------
+    workflow.add_node(
+        "prompt_evaluator",
+        prompt_review_node
+    )
+
+    workflow.add_node(
+        "clarify",
+        clarify_node
+    )
 
     workflow.add_node(
         "validate_request",
         validate_request_node
     )
 
-
     workflow.add_node(
         "router",
         router_node
     )
-
 
     workflow.add_node(
         "document_router",
         document_router_node
     )
 
-
     workflow.add_node(
         "vector_search",
         vector_search_node
     )
 
+    workflow.add_node(
+        "fts_search",
+        fts_search_node
+    )
+
+    workflow.add_node(
+        "hybrid_search",
+        hybrid_search_node
+    )
 
     workflow.add_node(
         "reranker",
         rerank_node
     )
-
 
     workflow.add_node(
         "answer_generator",
@@ -537,17 +553,27 @@ def build_rag_graph():
     )
 
     workflow.add_node(
-    "nl2sql",
-    nl2sql_node
-)
+        "nl2sql",
+        nl2sql_node
+    )
     # -----------------------------
     # Entry
     # -----------------------------
 
     workflow.set_entry_point(
-        "validate_request"
-    )
+    "prompt_evaluator"
+)
 
+    workflow.add_conditional_edges(
+    "prompt_evaluator",
+
+    lambda state: state["prompt_decision"],
+
+    {
+        "CLEAR": "validate_request",
+        "UNCLEAR": "clarify"
+    }
+)
 
     # -----------------------------
     # Validation routing
@@ -625,18 +651,6 @@ def build_rag_graph():
     "reranker"
 )
 
-
-    workflow.add_node(
-    "fts_search",
-    fts_search_node
-)
-
-
-    workflow.add_node(
-    "hybrid_search",
-    hybrid_search_node
-)
-
     workflow.add_edge(
         "reranker",
         "answer_generator"
@@ -645,6 +659,11 @@ def build_rag_graph():
     workflow.add_edge(
     "nl2sql",
     "answer_generator"
+)
+
+    workflow.add_edge(
+    "clarify",
+    END
 )
 
     workflow.add_edge(
