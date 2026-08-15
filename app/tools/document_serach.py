@@ -10,7 +10,7 @@ from psycopg.rows import dict_row
 import psycopg
 
 
-# @tool
+@tool
 def vector_search(query: str, k: int = 5):
     """
     Semantic Vector Search over document embeddings.
@@ -101,15 +101,102 @@ def vector_search(query: str, k: int = 5):
     return results
 
 
-# @tool
+
+
+
+@tool
+def fts_search(query: str, k: int = 5):
+    """
+    PostgreSQL Full Text Search over document chunks.
+
+    Uses PostgreSQL's English text search configuration to convert
+    the natural-language query into searchable terms and retrieve
+    relevant document chunks.
+    """
+
+    # Convert the natural-language query into a PostgreSQL tsquery.
+    # Example:
+    # "What is the charge for a duplicate statement?"
+    #        ↓
+    # "'duplic' & 'statement'"
+    #
+    # websearch_to_tsquery() handles natural-language input and
+    # stemming automatically.
+    sql = """
+        SELECT
+            content,
+            page_number,
+            section,
+            source_file,
+            ts_rank(
+                to_tsvector('english', content),
+                websearch_to_tsquery('english', %(query)s)
+            ) AS fts_rank
+
+        FROM multimodal_chunks
+
+        WHERE to_tsvector('english', content)
+              @@ websearch_to_tsquery('english', %(query)s)
+
+        ORDER BY fts_rank DESC
+
+        LIMIT %(k)s;
+    """
+
+    with psycopg.connect(
+        PG_FTS_CONNECTION,
+        row_factory=dict_row
+    ) as conn:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                sql,
+                {
+                    "query": query,
+                    "k": k
+                }
+            )
+
+            rows = cur.fetchall()
+
+    results = []
+
+    for row in rows:
+        results.append(
+            {
+                "content": row["content"],
+                "citation": {
+                    "page_number": row["page_number"],
+                    "section": row["section"],
+                    "source_file": row["source_file"],
+                },
+                "fts_rank": round(
+                    float(row["fts_rank"]),
+                    4
+                ),
+            }
+        )
+
+    return results
+
+
+
+@tool
 def hybrid_search(query: str, k: int = 5):
     """
-    Hybrid Search combining:
+    Hybrid Search over credit card knowledge documents.
 
-    1. Semantic Vector Search
-    2. PostgreSQL Full Text Search
+    Combines:
+    1. Semantic vector retrieval
+    2. PostgreSQL Full Text Search (FTS)
 
-    Results are combined using Reciprocal Rank Fusion (RRF).
+    Use this when:
+    - The question requires understanding of meaning and exact terms.
+    - The answer comes from credit card policies, fees, benefits,
+      rules, limits, or explanations.
+
+    Preferred for general credit card knowledge-base queries.
     """
 
     print("============= INSIDE HYBRID SEARCH ===============")
@@ -118,26 +205,26 @@ def hybrid_search(query: str, k: int = 5):
     # --------------------------------------------------
     # 1. Vector Search
     # --------------------------------------------------
-    vector_results = vector_search(
-        query,
-        k=10
-    )
+    vector_results = vector_search.invoke(
+    {
+        "query": query,
+        "k": 10
+    }
+)
 
     print("VECTOR RESULT COUNT:", len(vector_results))
-    print("VECTOR RESULTS:")
-    print(vector_results)
 
     # --------------------------------------------------
     # 2. Full Text Search
     # --------------------------------------------------
-    fts_results = fts_search(
-        query,
-        k=10
-    )
+    fts_results = fts_search.invoke(
+    {
+        "query": query,
+        "k": 10
+    }
+)
 
     print("FTS RESULT COUNT:", len(fts_results))
-    print("FTS RESULTS:")
-    print(fts_results)
 
     # --------------------------------------------------
     # 3. Reciprocal Rank Fusion
@@ -225,78 +312,54 @@ def hybrid_search(query: str, k: int = 5):
     return results[:k]
 
 
-# @tool
-def fts_search(query: str, k: int = 5):
-    """
-    PostgreSQL Full Text Search over document chunks.
 
-    Uses PostgreSQL's English text search configuration to convert
-    the natural-language query into searchable terms and retrieve
-    relevant document chunks.
-    """
+def vector_search_node(state: AdvisorState):
 
-    # Convert the natural-language query into a PostgreSQL tsquery.
-    # Example:
-    # "What is the charge for a duplicate statement?"
-    #        ↓
-    # "'duplic' & 'statement'"
-    #
-    # websearch_to_tsquery() handles natural-language input and
-    # stemming automatically.
-    sql = """
-        SELECT
-            content,
-            page_number,
-            section,
-            source_file,
-            ts_rank(
-                to_tsvector('english', content),
-                websearch_to_tsquery('english', %(query)s)
-            ) AS fts_rank
+    print("============== INSIDE VECTOR SEARCH NODE ==============")
 
-        FROM multimodal_chunks
+    results = vector_search.invoke(
+        {
+            "query": state["query"],
+            "k": 5
+        }
+    )
 
-        WHERE to_tsvector('english', content)
-              @@ websearch_to_tsquery('english', %(query)s)
+    return {
+        **state,
+        "retrieved_docs": results
+    }
 
-        ORDER BY fts_rank DESC
 
-        LIMIT %(k)s;
-    """
+def fts_search_node(state: AdvisorState):
 
-    with psycopg.connect(
-        PG_FTS_CONNECTION,
-        row_factory=dict_row
-    ) as conn:
+    print("============== INSIDE FTS SEARCH NODE ==============")
 
-        with conn.cursor() as cur:
+    results = fts_search.invoke(
+        {
+            "query": state["query"],
+            "k": 5
+        }
+    )
 
-            cur.execute(
-                sql,
-                {
-                    "query": query,
-                    "k": k
-                }
-            )
+    return {
+        **state,
+        "retrieved_docs": results
+    }
 
-            rows = cur.fetchall()
 
-    results = []
 
-    for row in rows:
-        results.append(
-            {
-                "content": row["content"],
-                "citation": {
-                    "page_number": row["page_number"],
-                    "section": row["section"],
-                    "source_file": row["source_file"],
-                },
-                "fts_rank": round(
-                    float(row["fts_rank"]),
-                    4
-                ),
-            }
-        )
+def hybrid_search_node(state: AdvisorState):
 
-    return results
+    print("============== INSIDE HYBRID SEARCH NODE ==============")
+
+    results = hybrid_search.invoke(
+        {
+            "query": state["query"],
+            "k": 5
+        }
+    )
+
+    return {
+        **state,
+        "retrieved_docs": results
+    }

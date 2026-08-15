@@ -3,6 +3,12 @@ from typing import List, Optional
 
 
 
+class PolicyCitation(BaseModel):
+    page_number: int
+    section: str
+    source_file: str
+
+
 
 class SpendSummaryRequest(BaseModel):
     query: str = Field(description="The user's question")
@@ -44,11 +50,9 @@ class RewardPoints(BaseModel):
 class SpendSummaryResponse(BaseModel):
        query: str = Field(description="The given query by user")
        answer: str = Field(description="The generated response")
-       policy_citations: str = Field(
-            description="Policy citation for the documents retrieved"
+       policy_citations: List[PolicyCitation] = Field(
+            description="Policy citations for the documents retrieved"
        )
-       page_no: str = Field(description="Page number in the metadata")
-       document_name: str = Field(description="Name of the document")
        sql_query_executed: Optional[str] = Field(
             description="The AI generated and executed SQL query for the query"
         )

@@ -5,8 +5,9 @@
 
 
 import os
+from app.nodes.answer_generator import answer_generator_node
 from app.nodes.validation import validate_request_node
-from app.tools.document_serach import vector_search
+from app.tools.document_serach import fts_search_node, hybrid_search_node, vector_search, vector_search_node
 import cohere
 from dotenv import load_dotenv
 
@@ -20,110 +21,13 @@ from app.schemas.query_schema import SpendSummaryResponse
 from app.core.db import get_sql_database
 from app.core.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
 from app.core.llm import  _get_llm
+from app.nodes.reranker import rerank_node
+from app.agents.main_router import router_node
+from app.agents.document_router import document_router_node
 
 from langgraph.checkpoint.memory import InMemorySaver
 
 memory = InMemorySaver()
-
-
-load_dotenv()
-
-
-MAX_SQL_RETRIES = 1
-
-
-
-
-
-# def rephrase_query(query):
-#     print("Inside Query",query)
-#     llm = _get_llm()
-
-#     prompt = f"""
-# You are a query rewriting assistant.
-
-# Rewrite the following user question into a clearer database query request.
-
-# Rules:
-# - Keep the same intent.
-# - Do not add information.
-# - Do not remove card IDs or customer IDs.
-# - Do not mention Python classes, code, schema, or implementation.
-# - Return ONLY the rewritten user question.
-
-# Original question:
-# {query}
-
-# Rewritten question:
-# """
-
-#     response = llm.invoke(prompt)
-
-#     return response.content.strip()
-class RouteDecision(BaseModel):
-   route: Literal["VECTOR_DB", "RDBMS"]
-   reason: str  # for debugging
-
-
-
-
-def router_node(state: AdvisorState) -> AdvisorState:
-   llm = _get_llm()
-   structured_llm = llm.with_structured_output(RouteDecision)
-
-
-   prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-You are a query router for a credit card spend summarizer.
-
-Classify the user's query into EXACTLY one route:
-
-RDBMS:
-Use this route when answering the query requires actual
-customer-specific or transaction-specific data stored in PostgreSQL,
-such as card transactions, spending, billing, account data,
-or reward points.
-
-DOCUMENT:
-Use this route when answering the query requires information
-from the credit card knowledge base, such as fees, charges,
-card features, benefits, policies, limits, reward rules,
-or general explanations and procedures.
-
-Important:
-- Customer/transaction data -> RDBMS
-- General credit-card knowledge/policy -> DOCUMENT
-- Return exactly one route: RDBMS or DOCUMENT.
-- Provide a short reason.
-            """,
-        ),
-        (
-            "human",
-            """
-Question:
-{query}
-            """,
-        ),
-    ]
-)
-
-   chain = prompt | structured_llm
-   decision = chain.invoke({"query": state["query"]})
-   print(f"[router_node's decision]: {decision.route} and reason: {decision.reason}")
-
-
-   return {**state, "route": decision.route}
-
-   # - Never invent transaction type values or other categorical values.
-    # - Do not use transaction types based on general credit-card knowledge.
-    # - Use only transaction type values that are supported by the database
-    # information provided to you.
-    # - For spending-related questions, select only transaction types that
-    # represent spending according to the available database information
-    # and project requirements.
 
 
 def nl2sql_node(state: AdvisorState) -> AdvisorState:
@@ -514,41 +418,6 @@ Metadata:
 
 
 
-
-def rerank_node(state: AdvisorState):
-   # establish connection with the cohere reranking model
-   co = cohere.ClientV2(api_key=os.getenv("COHERE_API_KEY"))
-   # send the query and the retrieved_docs to the reranking model
-
-
-   docs = state["retrieved_docs"]
-
-
-   print("=======3. INSIDE rerank_node. Before calling reranker =========")
-   rerank_response = co.rerank(
-       model="rerank-v3.5",
-       query=state["query"],
-       documents=[doc.page_content for doc in docs],
-       top_n=5,
-   )
-
-
-   # Map Cohere result indices back to LangChain Document objects
-   reranked_docs = [docs[r.index] for r in rerank_response.results]
-
-
-   print(f"[rerank_node] Top {len(reranked_docs)} chunks after reranking:")
-   for i, r in enumerate(rerank_response.results):
-       print(
-           f"  Rank {i+1} | Cohere score: {r.relevance_score:.4f} | original index: {r.index}"
-       )
-
-
-   return {**state, "reranked_docs": reranked_docs}
-
-
-
-
 def generate_answer_node(state: AdvisorState):
    llm = _get_llm()
    structured_llm = llm.with_structured_output(SpendSummaryResponse)
@@ -623,76 +492,180 @@ def generate_answer_node(state: AdvisorState):
 
 
 
-
 def build_rag_graph():
+
     workflow = StateGraph(AdvisorState)
+
+
+    # -----------------------------
+    # Nodes
+    # -----------------------------
 
     workflow.add_node(
         "validate_request",
         validate_request_node
     )
 
+
+    workflow.add_node(
+        "router",
+        router_node
+    )
+
+
+    workflow.add_node(
+        "document_router",
+        document_router_node
+    )
+
+
     workflow.add_node(
         "vector_search",
-        vector_search
+        vector_search_node
     )
+
+
+    workflow.add_node(
+        "reranker",
+        rerank_node
+    )
+
+
+    workflow.add_node(
+        "answer_generator",
+        answer_generator_node
+    )
+
+
+    # -----------------------------
+    # Entry
+    # -----------------------------
 
     workflow.set_entry_point(
         "validate_request"
     )
 
-    workflow.add_conditional_edges(
-            "validate_request",
-            lambda state: "END"
-            if state.get("validation_failed")
-            else "vector_search",
-            {
-                "END": END,
-                "vector_search": "vector_search",
-            },
-        )
 
+    # -----------------------------
+    # Validation routing
+    # -----------------------------
+
+    workflow.add_conditional_edges(
+
+        "validate_request",
+
+        lambda state:
+            "END"
+            if state.get("validation_failed")
+            else "router",
+
+        {
+            "END": END,
+            "router": "router"
+        }
+    )
+
+
+    # -----------------------------
+    # Main router
+    # DOCUMENT / RDBMS
+    # -----------------------------
+
+    workflow.add_conditional_edges(
+
+        "router",
+
+        lambda state: state["route"],
+
+        {
+            "DOCUMENT": "document_router",
+
+            # SQL not added yet
+            "RDBMS": END
+        }
+    )
+
+
+    # -----------------------------
+    # Document router
+    # VECTOR / FTS / HYBRID
+    # -----------------------------
+
+    workflow.add_conditional_edges(
+    "document_router",
+    lambda state: state["document_route"],
+    {
+        "VECTOR": "vector_search",
+        "FTS": "fts_search",
+        "HYBRID": "hybrid_search"
+    }
+)
+
+
+    # -----------------------------
+    # Vector flow
+    # -----------------------------
 
     workflow.add_edge(
         "vector_search",
+        "reranker"
+    )
+
+    workflow.add_edge(
+    "fts_search",
+    "reranker"
+)
+
+
+    workflow.add_edge(
+    "hybrid_search",
+    "reranker"
+)
+
+
+    workflow.add_node(
+    "fts_search",
+    fts_search_node
+)
+
+
+    workflow.add_node(
+    "hybrid_search",
+    hybrid_search_node
+)
+
+    workflow.add_edge(
+        "reranker",
+        "answer_generator"
+    )
+
+
+    workflow.add_edge(
+        "answer_generator",
         END
     )
+
 
     search_agent = workflow.compile(
         checkpointer=memory
     )
 
 
-    
-#    workflow = StateGraph(AdvisorState)
-#    workflow.add_node("validate_request", validate_request_node)
-#    workflow.add_node("nl2sql", nl2sql_node)
-
-#    workflow.set_entry_point("validate_request")
-#    workflow.add_conditional_edges(
-#     "validate_request",
-#     lambda state: "END" if state.get("validation_failed") else "nl2sql",
-#     {
-#         "END": END,
-#         "nl2sql": "nl2sql",
-#     },
-# )
-
-#    workflow.add_edge("nl2sql", END)
-
-#    search_agent =workflow.compile(
-#     checkpointer=memory
-# )
+    graph_image = (
+        search_agent
+        .get_graph()
+        .draw_mermaid_png()
+    )
 
 
-   # generating and saving the graph visualization
-    graph_image = search_agent.get_graph().draw_mermaid_png()
-    with open("search_agent.png", "wb") as f:
-       f.write(graph_image)
+    with open(
+        "search_agent.png",
+        "wb"
+    ) as f:
+        f.write(graph_image)
 
 
     return search_agent
-
 
 
 
