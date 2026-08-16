@@ -88,7 +88,7 @@ def build_rag_graph():
     lambda state: state["prompt_decision"],
 
     {
-        "CLEAR": "customer_context",
+        "CLEAR": "router",
         "UNCLEAR": "clarify"
     }
 )
@@ -99,18 +99,18 @@ def build_rag_graph():
 
     workflow.add_conditional_edges(
 
-        "customer_context",
+    "customer_context",
 
-        lambda state:
-            "END"
-            if state.get("validation_failed")
-            else "router",
+    lambda state:
+        "END"
+        if state.get("validation_failed")
+        else "nl2sql",
 
-        {
-            "END": END,
-            "router": "router"
-        }
-    )
+    {
+        "END": END,
+        "nl2sql": "nl2sql"
+    }
+)
 
 
     # -----------------------------
@@ -120,17 +120,15 @@ def build_rag_graph():
 
     workflow.add_conditional_edges(
 
-        "router",
+    "router",
 
-        lambda state: state["route"],
+    lambda state: state["route"],
 
-        {
-            "DOCUMENT": "document_router",
-
-            # SQL not added yet
-            "RDBMS": "nl2sql"
-        }
-    )
+    {
+        "DOCUMENT": "document_router",
+        "RDBMS": "customer_context"
+    }
+)
 
 
     # -----------------------------
