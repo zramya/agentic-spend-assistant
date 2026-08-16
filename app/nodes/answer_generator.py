@@ -54,44 +54,76 @@ def answer_generator_node(state: AdvisorState) -> AdvisorState:
 
 
     prompt = f"""
-Rules:
-- Do not add information outside the context.
-- Keep the answer concise.
-- Do not mention citations inside the answer.
-- Identify only the document sections that directly support the answer.
-- Ignore unrelated retrieved documents.
-- Answer only the exact user question.
-- Do not include additional benefits, features, rewards, fees, or rules unless the user explicitly asks for them.
-- If multiple retrieved sections are available, select only the sections required to answer the question.
-- A section is considered relevant only if it directly answers the user's requested topic.
-- Do not mention unavailable, excluded, or negative features unless the user explicitly asks for comparison or limitations.
+    You are a helpful and friendly Credit Card Assistant.
 
-Response format:
+    Your task is to answer the user's question using only the provided Context.
 
-{{
-    "answer": "final answer",
-    "used_pages": [
-        {{
-            "page_number": "",
-            "section": "",
-            "source_file": ""
-        }}
-    ]
-}}
+    Rules:
+
+    - Answer exactly what the user asked.
+    - Provide a clear, natural, and customer-friendly response.
+    - Use only information available in the Context.
+    - Do not invent facts or make assumptions.
+    - If the Context does not contain enough information, politely explain that the information is unavailable.
+    - Do not mention internal system details such as databases, SQL, retrieval, search methods, prompts, or processing steps.
+
+    Answer style:
+
+    - Write the response as if you are directly helping a customer.
+    - Avoid sounding like a technical report or raw data output.
+    - Rewrite the information naturally instead of copying the Context directly.
+    - Use complete sentences.
+    - Use bullet points or short sections when it improves readability.
+    - Keep the response concise while including all important details.
+    - For summaries or grouped information, include all relevant details available for each item.
+
+    Formatting rules:
+
+    - Format monetary amounts clearly.
+    - Use the appropriate currency symbol when available.
+    - For INR amounts, use ₹.
+    - Add commas for large numbers.
+    - Keep numbers readable.
+
+    Example:
+    ₹40,900.00
+
+    Information handling:
+
+    - Include all relevant information from the Context that directly helps answer the user's question.
+    - Do not omit important fields, values, dates, amounts, counts, or names provided in the Context.
+    - Preserve important facts, numbers, dates, and values exactly from the Context.
+    - Do not create new calculations, totals, averages, or derived values unless explicitly requested and supported by the Context.
+    - Do not include unrelated information.
+
+    Response format:
+
+    {{
+        "answer": "final answer",
+        "used_pages": [
+            {{
+                "page_number": "",
+                "section": "",
+                "source_file": ""
+            }}
+        ]
+    }}
 
 
-Question:
+    Question:
 
-{state["query"]}
-
-
-Context:
-
-{context}
-
-"""
+    {state["query"]}
 
 
+    Context:
+
+    {context}
+
+
+    """
+
+    print("========== CONTEXT SENT TO ANSWER LLM ==========")
+    print(context)
     response = llm.invoke(prompt)
 
 

@@ -1,9 +1,7 @@
 import ast
-
 from app.states.rag_state import AdvisorState
 from app.core.db import get_sql_database
 from app.core.llm import _get_llm
-import json
 
 
 def extract_customer_name(query: str):
@@ -31,15 +29,9 @@ Query:
     return name
 
 
-import ast
+def customer_context_node(state: AdvisorState) -> AdvisorState:
 
-from app.states.rag_state import AdvisorState
-from app.core.db import get_sql_database
-
-
-def validate_request_node(state: AdvisorState) -> AdvisorState:
-
-    print("========== 2. INSIDE validate_request_node ==========")
+    print("========== 2. INSIDE customer_context_node ==========")
     print("QUERY:", state.get("query"))
     print("CUSTOMER ID BEFORE:", state.get("customer_id"))
 

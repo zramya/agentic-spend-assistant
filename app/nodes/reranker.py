@@ -1,5 +1,5 @@
 import os
-from app.config.config import COHERE_API_KEY
+from app.core.config import COHERE_API_KEY
 from app.states.rag_state import AdvisorState
 import cohere
 

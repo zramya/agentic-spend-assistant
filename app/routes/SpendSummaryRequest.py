@@ -1,4 +1,4 @@
-from app.tools.document_serach import fts_search, hybrid_search,vector_search
+from app.tools.document_search import fts_search, hybrid_search,vector_search
 from fastapi import APIRouter
 from app.schemas.query_schema import SpendSummaryRequest, SpendSummaryResponse
 from app.services.query_service import query_documents
