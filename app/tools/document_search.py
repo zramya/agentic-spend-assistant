@@ -2,7 +2,7 @@ from json import tool
 
 from app.core.db import get_vector_store
 from app.states.rag_state import AdvisorState
-from app.core.config import PG_FTS_CONNECTION
+from app.config.config import PG_FTS_CONNECTION
 from psycopg.rows import dict_row
 from langchain_core.tools import tool
 from app.core.db import get_embeddings, get_db_conn

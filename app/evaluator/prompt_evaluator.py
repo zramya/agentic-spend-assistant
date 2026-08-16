@@ -1,3 +1,4 @@
+from app.config.responses import CLARIFICATION_RESPONSE, OUT_OF_SCOPE_RESPONSE
 from app.states.rag_state import AdvisorState
 from app.core.llm import _get_llm
 
@@ -12,6 +13,7 @@ You are a query clarity evaluator for a credit card assistant.
 Classify the user query as:
 - CLEAR
 - UNCLEAR
+- OUT_OF_SCOPE
 
 CLEAR means:
 - The user's intent is understandable.
@@ -21,7 +23,15 @@ UNCLEAR means:
 - The request is incomplete.
 - The intent cannot be determined.
 
+OUT_OF_SCOPE means:
+- The query is understandable but unrelated to credit cards, banking, transactions, rewards, fees, benefits, or spending analysis.
+
 Examples:
+
+OUT_OF_SCOPE:
+"How to make chocolate"
+"Tell me the weather"
+"Write a poem"
 
 CLEAR:
 "Show my reward points"
@@ -33,8 +43,10 @@ UNCLEAR:
 "Show details"
 "What about this?"
 
+
+
 Return only one word:
-CLEAR or UNCLEAR
+CLEAR, UNCLEAR, or OUT_OF_SCOPE
 
 Query:
 {state["query"]}
@@ -53,11 +65,17 @@ Query:
 
 def clarify_node(state: AdvisorState):
 
+    if state["prompt_decision"] == "OUT_OF_SCOPE":
+
+        answer = OUT_OF_SCOPE_RESPONSE
+    else:
+
+        answer = CLARIFICATION_RESPONSE
     return {
         **state,
         "response": {
             "query": state["query"],
-            "answer": "Could you please provide more details about your request?",
+            "answer": answer,
             "policy_citations": [],
             "page_no": "N/A",
             "document_name": "N/A",

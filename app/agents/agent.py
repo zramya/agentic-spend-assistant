@@ -31,7 +31,8 @@ def run_search_agent(
     "response": {},
     "generated_sql": "",
     "sql_result": "",
-    "validation_failed": False
+    "validation_failed": False,
+    "retry_count": 0
 }
 
 

@@ -1,5 +1,5 @@
 from app.nodes.sql_validator import validate_sql
-from app.core.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
+from app.config.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
 from app.core.db import get_sql_database, get_db_conn
 from app.core.llm import _get_llm
 from app.states.rag_state import AdvisorState

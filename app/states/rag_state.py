@@ -19,6 +19,8 @@ class AdvisorState(TypedDict):
    validation_failed: bool
    route_reason: str
    prompt_decision: str
+   retry_count: int
+   evaluation_result: str
 
 
 

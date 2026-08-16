@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import pathlib
-from app.core.config import OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL,PG_VECTOR_CONNECTION,PG_RDBMS_CONNECTION,PG_FTS_CONNECTION
+from app.config.config import OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL,PG_VECTOR_CONNECTION,PG_RDBMS_CONNECTION,PG_FTS_CONNECTION
 from dotenv import load_dotenv
 from langchain_postgres import PGVector
 from langchain_openai import OpenAIEmbeddings
