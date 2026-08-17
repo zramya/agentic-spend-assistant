@@ -1,4 +1,3 @@
-from app.config.responses import CLARIFICATION_RESPONSE, OUT_OF_SCOPE_RESPONSE
 from app.states.rag_state import AdvisorState
 from app.core.llm import _get_llm
 
@@ -15,40 +14,41 @@ Classify the user query as:
 - UNCLEAR
 - OUT_OF_SCOPE
 
+
 CLEAR means:
 - The user's intent is understandable.
 - The assistant can determine what information is requested.
+- The query is related to credit cards, banking, transactions, rewards, fees,
+  benefits, statements, or spending analysis.
+
+Examples of CLEAR queries:
+
+"Show my reward points"
+"What is the annual fee for Platinum card?"
+"Show my spending summary"
+"How much did I spend last month?"
+"What are the benefits of my card?"
+
 
 UNCLEAR means:
 - The request is incomplete.
 - The intent cannot be determined.
+- More information is required before answering.
 
-OUT_OF_SCOPE means:
-- The query is understandable but unrelated to credit cards, banking, transactions, rewards, fees, benefits, or spending analysis.
+Examples of UNCLEAR queries:
 
-Examples:
-
-OUT_OF_SCOPE:
-"How to make chocolate"
-"Tell me the weather"
-"Write a poem"
-
-CLEAR:
-"Show my reward points"
-"What is the annual fee for Platinum card?"
-"Show my spending summary"
-
-UNCLEAR:
 "Tell me about it"
 "Show details"
 "What about this?"
-
+"Explain this"
+"Give me information"
 
 
 Return only one word:
-CLEAR, UNCLEAR, or OUT_OF_SCOPE
+CLEAR or UNCLEAR or OUT_OF_SCOPE
 
-Query:
+
+User Query:
 {state["query"]}
 """
 
@@ -62,15 +62,22 @@ Query:
     }
 
 
-
-def clarify_node(state: AdvisorState):
+def clarify_node(state):
 
     if state["prompt_decision"] == "OUT_OF_SCOPE":
 
-        answer = OUT_OF_SCOPE_RESPONSE
+        answer = (
+            "I'm sorry, I can only help with credit card and "
+            "banking-related queries such as card details, fees, "
+            "transactions, rewards, and spending analysis."
+        )
+
     else:
 
-        answer = CLARIFICATION_RESPONSE
+        answer = (
+            "Could you please provide more details about your request?"
+        )
+
     return {
         **state,
         "response": {

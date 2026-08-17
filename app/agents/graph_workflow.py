@@ -90,9 +90,7 @@ def build_rag_graph():
 
     workflow.add_conditional_edges(
     "prompt_evaluator",
-
     lambda state: state["prompt_decision"],
-
     {
         "CLEAR": "router",
         "UNCLEAR": "clarify",

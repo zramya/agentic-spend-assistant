@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from app.routes import SpendSummaryRequest
+from app.routes.query_route import router as query_router
+from app.routes.upload_route import router as upload_router
 
 
 app = FastAPI()
@@ -21,4 +22,6 @@ def health_check():
 
 
 
-app.include_router(SpendSummaryRequest.router)
+app.include_router(upload_router)
+app.include_router(query_router)
+

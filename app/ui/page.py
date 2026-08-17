@@ -7,7 +7,7 @@ import re
 # Configuration
 # =============================================================================
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://localhost:9000"
 
 UPLOAD_ENDPOINT = f"{API_BASE_URL}/api/v1/credit-card/ingestion"
 QUERY_ENDPOINT = f"{API_BASE_URL}/api/v1/credit-card/query"
