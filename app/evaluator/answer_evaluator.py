@@ -43,7 +43,13 @@ PASS or FAIL
 
     print("ANSWER EVALUATION:", result)
 
+    retry_count = state.get("retry_count", 0)
+
+    if result == "FAIL":
+        retry_count += 1
+
     return {
         **state,
-        "evaluation_result": result
+        "evaluation_result": result,
+        "retry_count": retry_count
     }
