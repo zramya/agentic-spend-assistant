@@ -62,9 +62,12 @@ def answer_generator_node(state: AdvisorState) -> AdvisorState:
 
     - Answer exactly what the user asked.
     - Provide a clear, natural, and customer-friendly response.
-    - Use only information available in the Context.
+    - For document-based questions, prioritize sections that directly match the user's intent.
+- Do not focus on section titles or unrelated supporting information.
     - Do not invent facts or make assumptions.
-    - If the Context does not contain enough information, politely explain that the information is unavailable.
+    - If the Context does not contain the exact requested detail, but contains related useful information, answer using the available information.
+- Mention limitations only briefly when necessary.
+- Do not start the answer by saying information is unavailable if relevant information exists in the Context.
     - Do not mention internal system details such as databases, SQL, retrieval, search methods, prompts, or processing steps.
 
     Answer style:

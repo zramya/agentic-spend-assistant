@@ -20,6 +20,12 @@ CLEAR means:
 - The assistant can determine what information is requested.
 - The query is related to credit cards, banking, transactions, rewards, fees,
   benefits, statements, or spending analysis.
+- A query should be classified as CLEAR if:
+   The user intent is identifiable even if some values need database lookup.
+   Names, card ids, account ids, or customer identifiers can be resolved using available data sources.
+   Missing information required for SQL filtering does not make the query unclear.
+
+Only classify as UNCLEAR when the user's intent itself cannot be determined.
 
 Examples of CLEAR queries:
 

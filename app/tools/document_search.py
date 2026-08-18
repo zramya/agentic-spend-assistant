@@ -136,7 +136,14 @@ def fts_search(query: str, k: int = 5):
         FROM multimodal_chunks
 
         WHERE to_tsvector('english', content)
-              @@ websearch_to_tsquery('english', %(query)s)
+      @@ websearch_to_tsquery(
+          'english',
+          replace(%(query)s, ' ', ' OR ')
+      )
+
+      AND content NOT ILIKE 'Image%%'
+      AND content NOT ILIKE 'The image%%'
+      AND content NOT ILIKE 'Illustration%%'
 
         ORDER BY fts_rank DESC
 
@@ -320,7 +327,7 @@ def vector_search_node(state: AdvisorState):
     results = vector_search.invoke(
         {
             "query": state["query"],
-            "k": 5
+            "k": 10
         }
     )
 
@@ -337,7 +344,7 @@ def fts_search_node(state: AdvisorState):
     results = fts_search.invoke(
         {
             "query": state["query"],
-            "k": 5
+            "k": 10
         }
     )
 
@@ -355,7 +362,7 @@ def hybrid_search_node(state: AdvisorState):
     results = hybrid_search.invoke(
         {
             "query": state["query"],
-            "k": 5
+            "k": 10
         }
     )
 

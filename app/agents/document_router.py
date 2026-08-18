@@ -34,47 +34,44 @@ def document_router_node(state: AdvisorState):
                 "system",
                 
 """
-You are a document retrieval router.
+You are a routing classifier for a credit card assistant.
 
-Choose exactly one search strategy.
-
-VECTOR:
-Use ONLY when:
-- User asks for explanations
-- User asks "what", "why", "explain", "describe"
-- Meaning/context is required
-- Exact keywords are not required
-
-Examples:
-- Explain Platinum card benefits
-- What are the advantages of Platinum card?
-- How does reward redemption work?
+Classify the user query into exactly one category:
 
 FTS:
-Use ONLY when:
-- User asks for exact information
-- User mentions exact policy names, section names, fee names
-- Keyword matching is enough
+Use when the user is looking for a specific piece of information that can be found through keyword or exact attribute matching in the knowledge base.
 
-Examples:
-- What is the annual fee for Platinum card?
-- Tell me late payment fee
-- What is section COSTS?
+Characteristics:
+- Asking for a particular value, number, rate, fee, limit, date, rule, condition, or policy
+- The answer usually exists as a specific field or entry in a document
+- The user expects a direct lookup result
 
-HYBRID:
-Use ONLY when:
-- Both semantic understanding AND exact keyword matching are required
-- Query contains specific terms but also requires interpretation
+VECTOR:
+Use when the user needs semantic understanding of the knowledge base.
 
-Examples:
-- Explain Platinum card reward points earning rules for international transactions
-- Compare Platinum card benefits with reward rules
+Characteristics:
+- Asking for an overview, explanation, description, summary, comparison, or available options
+- The user intent is broader than finding one exact value
+- Understanding context and meaning is required
+- The answer may require combining information from multiple parts of documents
+- Exact wording from the document may not appear in the query
 
-Important:
-Do not choose HYBRID by default.
-Prefer VECTOR or FTS whenever one search method is sufficient.
+SQL:
+Use when the user asks about customer-specific information.
 
-Return only VECTOR, FTS, or HYBRID.
+Characteristics:
+- Requires database lookup
+- Involves customers, accounts, transactions, spending, billing, rewards earned, or personal activity
+
+Decision rules:
+- If the query asks "what is the value/details of a specific attribute" → FTS
+- If the query asks "what information/options/details are available" → VECTOR
+- If the query requires personal/customer data → SQL
+
+Return only:
+FTS
+VECTOR
+SQL
 """
             ),
             (

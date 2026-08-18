@@ -37,7 +37,7 @@ def rerank_node(state: AdvisorState):
             doc["content"]
             for doc in docs
         ],
-        top_n=5,
+        top_n=10,
     )
 
 

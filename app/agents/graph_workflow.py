@@ -1,5 +1,6 @@
 from app.evaluator.answer_evaluator import answer_evaluator_node
 from app.nodes.customer_context import customer_context_node
+from app.nodes.retry_handler import retry_handler_node
 from langgraph.graph import StateGraph, END
 from app.nodes.nl2sql import nl2sql_node
 from app.agents.document_router import document_router_node
@@ -79,6 +80,11 @@ def build_rag_graph():
     workflow.add_node(
     "answer_evaluator",
     answer_evaluator_node
+)
+
+    workflow.add_node(
+    "retry_handler",
+    retry_handler_node
 )
     # -----------------------------
     # Entry
@@ -198,16 +204,27 @@ def build_rag_graph():
     lambda state:
         "retry"
         if (
-            state["evaluation_result"] == "FAIL"
+            state.get("evaluation_result") == "FAIL"
             and state.get("retry_count", 0) < 2
         )
         else "end",
 
     {
-        "retry": "nl2sql",
+        "retry": "retry_handler",
         "end": END
     }
 )
+
+    workflow.add_conditional_edges(
+        "retry_handler",
+
+        lambda state: state.get("route"),
+
+        {
+            "DOCUMENT": "document_router",
+            "RDBMS": "nl2sql"
+        }
+    )
 
     search_agent = workflow.compile(
         checkpointer=memory
