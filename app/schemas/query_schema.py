@@ -12,8 +12,10 @@ class PolicyCitation(BaseModel):
 
 class SpendSummaryRequest(BaseModel):
     query: str = Field(description="The user's question")
-    customer_id: str | None = None
-    thread_id: str = "default_thread"
+    customer_id: str | None = None   
+    customer_name: str | None = None   
+    chat_history: list | None = None
+    thread_id: Optional[str] = None
 
 
 # # query api endpoint response format

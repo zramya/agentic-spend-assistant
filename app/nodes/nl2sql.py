@@ -24,15 +24,21 @@ def nl2sql_node(state: AdvisorState) -> AdvisorState:
 
     sql_chain = sql_prompt | llm
 
+    business_rules = "\n".join(
+        [
+            doc["content"]
+            for doc in state.get("business_rules_docs", [])
+            ]
+        )
 
     raw_sql = sql_chain.invoke(
-        {
-            "schema": schema_info,
-            "query": state["query"],
-            "customer_id": state.get("customer_id")
-        }
-    )
-
+{
+    "schema": schema_info,
+    "query": state["query"],
+    "business_rules_docs": business_rules,
+    "customer_id": state.get("customer_id")
+}
+)
 
     print("======== GENERATED RAW SQL QUERY ========")
     print(raw_sql.content)

@@ -96,9 +96,11 @@ def get_sql_prompt():
             - Do not derive a metric from transaction records when an authoritative
               field or documented calculation exists.
             
-            - Do not invent constants, thresholds, conversion rates, or business
-              rules. Use only values supported by the database schema or documented
-              project requirements.
+            - Do not invent constants, thresholds, conversion rates, or business rules.
+
+            If a business rule value is explicitly provided in Retrieved Business Rules,
+            you may use that value in SQL calculations.
+            Do not use any value that is not present in Retrieved Business Rules.
             
             - When a question asks for multiple metrics, retrieve or calculate
               all required metrics in the same query when practical.
@@ -113,7 +115,7 @@ def get_sql_prompt():
               - When the user asks about reward points and an INR redemption value
               is requested, use the reward-point redemption value available in
               the database or retrieved document context.
-            - Do not hardcode the redemption value.
+            - Do not use redemption values unless they are explicitly available in Retrieved Business Rules or database fields.
             
             8. AGGREGATION AND ANALYSIS
             
@@ -177,6 +179,8 @@ Do not assume calendar month boundaries for credit card spend analysis.
 Database schema:
 {schema}
 
+Retrieved Business Rules:
+{business_rules_docs}
 
 Customer ID:
 {customer_id}

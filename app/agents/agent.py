@@ -11,7 +11,9 @@ rag_graph = build_rag_graph()
 def run_search_agent(
     query: str,
     customer_id: str | None = None,
-    thread_id: str = "default_thread"
+    customer_name:str | None=None,
+    chat_history: list | None = None,
+    thread_id: str  | None = None
 ):
 
     print("============1. INSIDE run_search_agent")
@@ -25,31 +27,35 @@ def run_search_agent(
     initial_state = {
     "query": query,
     "customer_id": customer_id,
-    "customer_name": None,
+    "customer_name":customer_name,
     "retrieved_docs": [],
     "reranked_docs": [],
     "response": {},
     "generated_sql": "",
     "sql_result": "",
     "validation_failed": False,
-    "retry_count": 0
+    "retry_count": 0,
+    "business_rules_docs": [],
+    "chat_history": chat_history or []
 }
 
 
     # Load previous memory
+   # Load previous memory
     previous_state = rag_graph.get_state(config)
 
     if previous_state.values:
 
-      if not customer_id:
-          initial_state["customer_id"] = (
-              previous_state.values.get("customer_id")
-          )
+        # Use memory only if UI did not send customer details
+        if not customer_id and not customer_name:
 
-          initial_state["customer_name"] = (
-              previous_state.values.get("customer_name")
-          )
+            initial_state["customer_id"] = (
+                previous_state.values.get("customer_id")
+            )
 
+            initial_state["customer_name"] = (
+                previous_state.values.get("customer_name")
+            )
 
     print(
         "STATE BEFORE INVOKE:",

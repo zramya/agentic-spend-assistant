@@ -370,3 +370,44 @@ def hybrid_search_node(state: AdvisorState):
         **state,
         "retrieved_docs": results
     }
+
+
+@tool
+def business_rule_retrieval(query: str, k: int = 5):
+    """
+    Retrieve authoritative business rules from documents.
+
+    Used for:
+    - reward point conversion
+    - reward earning rules
+    - fee waiver thresholds
+    - calculation mappings
+    """
+
+    print("========== BUSINESS RULE RETRIEVAL ==========")
+
+    results = hybrid_search.invoke(
+        {
+            "query": query,
+            "k": k
+        }
+    )
+
+    return results
+
+
+def business_rule_node(state: AdvisorState):
+
+    print("========== BUSINESS RULE NODE ==========")
+
+    results = business_rule_retrieval.invoke(
+        {
+            "query": state["query"],
+            "k": 5
+        }
+    )
+
+    return {
+        **state,
+        "business_rules_docs": results
+    }

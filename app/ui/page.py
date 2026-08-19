@@ -155,7 +155,15 @@ def handle_personal_conversation(message: str):
 
             name = match.group(1).strip().title()
 
+            # Store latest user name
             st.session_state.user_name = name
+
+            # IMPORTANT:
+            # Reset LangGraph memory when user changes
+            st.session_state.thread_id = str(uuid.uuid4())
+
+            print("USER NAME STORED:", st.session_state.user_name)
+            print("NEW THREAD ID:", st.session_state.thread_id)
 
             return (
                 f"Hi {name}! 👋 "
@@ -163,7 +171,7 @@ def handle_personal_conversation(message: str):
                 "How can I help you understand your spending, rewards, or card benefits today?"
             )
 
-    # -------------------------------------------------------------------------
+        # -------------------------------------------------------------------------
     # Greetings
     # -------------------------------------------------------------------------
 
@@ -176,9 +184,18 @@ def handle_personal_conversation(message: str):
         "good morning",
         "good afternoon",
         "good evening",
+         "how are you",
+         "greet me"
     ]
 
     if lower_text in greetings:
+
+        if lower_text in ["how are you", "how are you?"]:
+            return (
+                "I'm doing great! 😊 "
+                "I'm here to help you with your credit card spending, "
+                "rewards, fees, benefits, and card-related questions."
+            )
 
         if st.session_state.user_name:
 
@@ -193,6 +210,25 @@ def handle_personal_conversation(message: str):
             "I can help you analyze credit-card spending, "
             "rewards, fees, benefits and NorthStar card rules."
         )
+
+    # -------------------------------------------------------------------------
+# Identity / assistant questions
+# -------------------------------------------------------------------------
+
+    assistant_identity_questions = [
+        "who are you",
+        "what are you",
+        "tell me about yourself",
+        "introduce yourself",
+    ]
+
+    if lower_text in assistant_identity_questions:
+
+            return (
+                "I'm NorthStar AI Credit Card Spend Assistant. 🤖 "
+                "I can help you with credit card spending analysis, "
+                "transactions, rewards, fees, benefits, and card-related information."
+            )
 
     # -------------------------------------------------------------------------
     # Identity questions
@@ -405,6 +441,8 @@ if prompt:
 
     else:
 
+    # Actual Credit Card / RAG Question
+
         # ---------------------------------------------------------------------
         # Actual Credit Card / RAG Question
         # ---------------------------------------------------------------------
@@ -413,16 +451,17 @@ if prompt:
 
             message_placeholder = st.empty()
 
-            with st.spinner("Analyzing your request..."):
+            with st.spinner("Processing your request..."):
 
                 try:
 
                     payload = {
                         "query": prompt,
                         "thread_id": st.session_state.thread_id,
-                        "chat_history": st.session_state.messages,
+                        "chat_history": st.session_state.messages[:-1],
+                        "customer_name": st.session_state.user_name,
                     }
-
+                    print("PAYLOAD SENT TO BACKEND:", payload)   
                     response = requests.post(
                         QUERY_ENDPOINT,
                         json=payload,
@@ -453,35 +492,41 @@ if prompt:
                         # -------------------------------------------------------------
 
                         citations = data.get(
-                            "citations",
-                            [],
-                        )
+                        "policy_citations",
+                        [],
+                    )
 
                         if citations:
 
-                            with st.expander("📚 Sources / Retrieved Knowledge"):
+                            with st.expander("📚 Sources"):
 
                                 for index, citation in enumerate(
                                     citations,
                                     start=1,
                                 ):
 
-                                    st.markdown(f"**{index}.** {citation}")
+                                    st.markdown(
+                                        f"""
+                                        **{index}. {citation.get('source_file')}**
 
-                        # -------------------------------------------------------------
-                        # Optional metadata
-                        # -------------------------------------------------------------
+                                        - Page: {citation.get('page_number')}
+                                        - Section: {citation.get('section')}
+                                        """
+                                    )
+                            # -------------------------------------------------------------
+                            # Optional metadata
+                            # -------------------------------------------------------------
 
-                        retrieval_info = data.get(
-                            "retrieval",
-                            None,
-                        )
+                                retrieval_info = data.get(
+                                        "retrieval",
+                                        None,
+                                    )
 
-                        if retrieval_info:
+                                if retrieval_info:
 
-                            with st.expander("🔎 Retrieval Details"):
+                                    with st.expander("🔎 Retrieval Details"):
 
-                                st.json(retrieval_info)
+                                        st.json(retrieval_info)
 
                         # -------------------------------------------------------------
                         # Save assistant response

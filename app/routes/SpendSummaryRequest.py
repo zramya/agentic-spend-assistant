@@ -1,58 +1,58 @@
-from app.tools.document_search import fts_search, hybrid_search,vector_search
-from fastapi import APIRouter
-from app.schemas.query_schema import SpendSummaryRequest, SpendSummaryResponse
-from app.services.query_service import query_documents
+# from app.tools.document_search import fts_search, hybrid_search,vector_search
+# from fastapi import APIRouter
+# from app.schemas.query_schema import SpendSummaryRequest, SpendSummaryResponse
+# from app.services.query_service import query_documents
 
 
-router = APIRouter(prefix="/api/v1/credit-card")
+# router = APIRouter(prefix="/api/v1/credit-card")
 
 
 
-@router.post("/query")
-def query_endpoint(request: SpendSummaryRequest) -> SpendSummaryResponse:
+# @router.post("/query")
+# def query_endpoint(request: SpendSummaryRequest) -> SpendSummaryResponse:
 
-    docs = query_documents(
-        query=request.query,
-        customer_id=request.customer_id,
-        thread_id="default_thread"
-    )
+#     docs = query_documents(
+#         query=request.query,
+#         customer_id=request.customer_id,
+#         thread_id="default_thread"
+#     )
 
-    return docs
-
-
-@router.post("/vector-search")
-def vector_search_endpoint(
-    request: SpendSummaryRequest
-):
-    results = vector_search(request.query)
-
-    return {
-        "results": results
-    }
+#     return docs
 
 
-@router.post("/fts-search")
-def fts_search_api(request: SpendSummaryRequest):
-    result = fts_search(
-        request.query,
-        k=5
-    )
+# @router.post("/vector-search")
+# def vector_search_endpoint(
+#     request: SpendSummaryRequest
+# ):
+#     results = vector_search(request.query)
 
-    return {
-        "results": result
-    }
+#     return {
+#         "results": results
+#     }
 
 
-@router.post("/hybrid-search")
-def hybrid_search_endpoint(
-    request: SpendSummaryRequest
-):
+# @router.post("/fts-search")
+# def fts_search_api(request: SpendSummaryRequest):
+#     result = fts_search(
+#         request.query,
+#         k=5
+#     )
 
-    results = hybrid_search(
-        request.query,
-        k=5
-    )
+#     return {
+#         "results": result
+#     }
 
-    return {
-        "results": results
-    }
+
+# @router.post("/hybrid-search")
+# def hybrid_search_endpoint(
+#     request: SpendSummaryRequest
+# ):
+
+#     results = hybrid_search(
+#         request.query,
+#         k=5
+#     )
+
+#     return {
+#         "results": results
+#     }

@@ -41,6 +41,7 @@ def customer_context_node(state: AdvisorState) -> AdvisorState:
     customer_name = state.get("customer_name")
 
 
+
     # -------------------------------------------------
     # Step 1: Check if user mentioned a customer name
     # If yes, always resolve and override memory
@@ -48,13 +49,33 @@ def customer_context_node(state: AdvisorState) -> AdvisorState:
 
     extracted_name = None
 
-    try:
-        extracted_name = extract_customer_name(
-            state.get("query", "")
+
+    # 1. First check UI/session customer name
+    if customer_name:
+
+        extracted_name = customer_name
+
+        print(
+            "CUSTOMER NAME USING UI CONTEXT:",
+            extracted_name
         )
 
-    except Exception as e:
-        print("Customer extraction failed:", e)
+
+    # 2. Otherwise try extracting from query
+    else:
+
+        try:
+
+            extracted_name = extract_customer_name(
+                state.get("query", "")
+            )
+
+        except Exception as e:
+
+            print(
+                "Customer extraction failed:",
+                e
+            )
 
 
     if extracted_name:
@@ -85,7 +106,7 @@ def customer_context_node(state: AdvisorState) -> AdvisorState:
                         "I couldn't find your customer account. "
                         "Please check your name or provide your customer ID."
                     ),
-                    "policy_citations": "N/A",
+                    "policy_citations": [],
                     "page_no": "N/A",
                     "document_name": "credit_card_advisor",
                     "sql_query_executed": None,
@@ -149,7 +170,7 @@ def customer_context_node(state: AdvisorState) -> AdvisorState:
                         "I couldn't find your customer account. "
                         "Please check your customer ID and try again."
                     ),
-                    "policy_citations": "N/A",
+                    "policy_citations": [],
                     "page_no": "N/A",
                     "document_name": "credit_card_advisor",
                     "sql_query_executed": None,

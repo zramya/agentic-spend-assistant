@@ -21,6 +21,9 @@ class AdvisorState(TypedDict):
    prompt_decision: str
    retry_count: int
    evaluation_result: str
+   business_rules_required: str
+   business_rules_docs: list
+   chat_history: list
 
 
 

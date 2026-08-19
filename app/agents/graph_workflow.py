@@ -1,4 +1,7 @@
+from functools import lru_cache
+
 from app.evaluator.answer_evaluator import answer_evaluator_node
+from app.evaluator.business_rule_retriever import  business_rule_retriever_node
 from app.nodes.customer_context import customer_context_node
 from app.nodes.retry_handler import retry_handler_node
 from langgraph.graph import StateGraph, END
@@ -9,7 +12,11 @@ from app.evaluator.prompt_evaluator import clarify_node, prompt_review_node
 from app.nodes.answer_generator import answer_generator_node
 from app.nodes.reranker import rerank_node
 from app.states.rag_state import AdvisorState
-from app.tools.document_search import fts_search_node, hybrid_search_node, vector_search_node
+from app.tools.document_search import (
+    fts_search_node,
+    hybrid_search_node,
+    vector_search_node
+)
 from langgraph.checkpoint.memory import InMemorySaver
 
 memory = InMemorySaver()
@@ -76,11 +83,16 @@ def build_rag_graph():
         "nl2sql",
         nl2sql_node
     )
+    workflow.add_node(
+    "business_rule_retriever",
+    business_rule_retriever_node
+)
 
     workflow.add_node(
     "answer_evaluator",
     answer_evaluator_node
 )
+    
 
     workflow.add_node(
     "retry_handler",
@@ -100,7 +112,8 @@ def build_rag_graph():
     {
         "CLEAR": "router",
         "UNCLEAR": "clarify",
-        "OUT_OF_SCOPE": "clarify"
+        "OUT_OF_SCOPE": "clarify",
+        "INTERNAL_REQUEST": "clarify"
     }
 )
 
@@ -115,14 +128,13 @@ def build_rag_graph():
     lambda state:
         "END"
         if state.get("validation_failed")
-        else "nl2sql",
+        else "business_rule_retriever",
 
     {
         "END": END,
-        "nl2sql": "nl2sql"
+        "business_rule_retriever": "business_rule_retriever"
     }
 )
-
 
     # -----------------------------
     # Main router
@@ -212,6 +224,19 @@ def build_rag_graph():
     {
         "retry": "retry_handler",
         "end": END
+    }
+)
+
+    workflow.add_conditional_edges(
+
+    "business_rule_retriever",
+
+    lambda state:
+        state.get("business_rule_required"),
+
+    {
+        "YES": "nl2sql",
+        "NO": "nl2sql"
     }
 )
 
