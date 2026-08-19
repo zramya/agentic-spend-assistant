@@ -1,5 +1,4 @@
 from app.nodes.sql_validator import validate_sql
-from app.config.business_rules import FEE_WAIVER_THRESHOLDS, REWARD_POINT_VALUE_INR
 from app.core.db import get_sql_database, get_db_conn
 from app.core.llm import _get_llm
 from app.states.rag_state import AdvisorState
@@ -20,16 +19,6 @@ def nl2sql_node(state: AdvisorState) -> AdvisorState:
     # Get live schema
     schema_info = db.get_table_info()
 
-
-    business_rules = f"""
-Fee waiver thresholds by card variant:
-{FEE_WAIVER_THRESHOLDS}
-
-Reward point redemption value:
-1 reward point = INR {REWARD_POINT_VALUE_INR}
-"""
-
-
     # Generate SQL
     sql_prompt = get_sql_prompt()
 
@@ -40,7 +29,6 @@ Reward point redemption value:
         {
             "schema": schema_info,
             "query": state["query"],
-            "business_rules": business_rules,
             "customer_id": state.get("customer_id")
         }
     )

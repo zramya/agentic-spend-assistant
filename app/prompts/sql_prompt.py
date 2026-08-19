@@ -33,29 +33,15 @@ def get_sql_prompt():
               schema, metadata, or documented requirements, do not guess.
             
             3. BUSINESS RULES
-            
-            - The provided business rules are authoritative application-level
-              rules and may contain values that are not stored in the database.
-            
-            - When a user's question requires a business rule, use the relevant
-              rule provided in the business rules section.
-            
-              - Do not return only the primary metric if additional related metrics
-              are required by the documented analysis definition.
-            
-            - Do not ignore a provided business rule when it is required to answer
-              the user's question.
-            
-            - Do not invent, modify, or substitute business-rule values.
-            
-            - Use database fields together with the applicable business rule when
-              the calculation depends on both.
-            -For spending summaries grouped by category or merchant, include:
-                - transaction count
-                - total spend
-                - reward points earned
-
-                when these fields are available in the schema.  
+            - Do not assume or hardcode business-rule values.
+            - Business rules, thresholds, conversion rates, fees, reward values,
+              earning rates, waiver conditions, and similar values must come from
+              the provided database data, schema metadata, or retrieved documents
+              when available.
+            - Never invent or substitute a business-rule value.
+            - If a required business rule is not available in the database,
+              schema, or retrieved document context, do not guess.
+            - Use the authoritative source available for the requested metric. 
                 
             4. CUSTOMER AND CARD CONTEXT
             - If customer_id is provided as context, apply it to all
@@ -124,9 +110,10 @@ def get_sql_prompt():
               - When returning card-level results, include descriptive card attributes
               available in the schema when they are part of the documented output
               requirements.
-              - When the user asks about reward points and a redemption value is
-              requested or relevant to the documented use case, include the
-              corresponding INR value using the provided reward point business rule.
+              - When the user asks about reward points and an INR redemption value
+              is requested, use the reward-point redemption value available in
+              the database or retrieved document context.
+            - Do not hardcode the redemption value.
             
             8. AGGREGATION AND ANALYSIS
             
@@ -190,10 +177,6 @@ Do not assume calendar month boundaries for credit card spend analysis.
 Database schema:
 {schema}
 
-
-
-Business rules:
-{business_rules}
 
 Customer ID:
 {customer_id}
