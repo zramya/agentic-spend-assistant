@@ -1,0 +1,13 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+PG_VECTOR_CONNECTION = os.getenv("PG_CONNECTION_STRING")
+PG_RDBMS_CONNECTION = os.getenv("PG_RDBMS_CONNECTION_STRING")
+PG_FTS_CONNECTION = os.getenv("PG_CONNECTION_STRING_FTS")
+COHERE_API_KEY=os.getenv("COHERE_API_KEY")
