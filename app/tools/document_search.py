@@ -109,52 +109,41 @@ LIMIT %(k)s;
 
 
 
-
 @tool
 def fts_search(query: str, k: int = 5):
     """
     PostgreSQL Full Text Search over document chunks.
 
-    Uses PostgreSQL's English text search configuration to convert
-    the natural-language query into searchable terms and retrieve
-    relevant document chunks.
+    Uses PostgreSQL's English text search configuration to retrieve
+    relevant document chunks along with image metadata.
     """
 
-    # Convert the natural-language query into a PostgreSQL tsquery.
-    # Example:
-    # "What is the charge for a duplicate statement?"
-    #        ↓
-    # "'duplic' & 'statement'"
-    #
-    # websearch_to_tsquery() handles natural-language input and
-    # stemming automatically.
     sql = """
-        SELECT
-            content,
-            page_number,
-            section,
-            source_file,
-            ts_rank(
-                to_tsvector('english', content),
-                websearch_to_tsquery('english', %(query)s)
-            ) AS fts_rank
+    SELECT
+        content,
+        chunk_type,
+        image_path,
+        mime_type,
+        page_number,
+        section,
+        source_file,
+        ts_rank(
+            to_tsvector('english', content),
+            websearch_to_tsquery('english', %(query)s)
+        ) AS fts_rank
 
-        FROM multimodal_chunks
+    FROM multimodal_chunks
 
-        WHERE to_tsvector('english', content)
+    WHERE to_tsvector('english', content)
       @@ websearch_to_tsquery(
           'english',
           replace(%(query)s, ' ', ' OR ')
       )
 
-      AND content NOT ILIKE 'Image%%'
-      AND content NOT ILIKE 'The image%%'
-      AND content NOT ILIKE 'Illustration%%'
+    ORDER BY fts_rank DESC
 
-        ORDER BY fts_rank DESC
-
-        LIMIT %(k)s;
-    """
+    LIMIT %(k)s;
+"""
 
     with psycopg.connect(
         PG_FTS_CONNECTION,
@@ -176,20 +165,24 @@ def fts_search(query: str, k: int = 5):
     results = []
 
     for row in rows:
+
         results.append(
-            {
-                "content": row["content"],
-                "citation": {
-                    "page_number": row["page_number"],
-                    "section": row["section"],
-                    "source_file": row["source_file"],
-                },
-                "fts_rank": round(
-                    float(row["fts_rank"]),
-                    4
-                ),
-            }
-        )
+    {
+        "content": row["content"],
+        "content_type": row["chunk_type"],
+        "image_path": row["image_path"],
+        "mime_type": row["mime_type"],
+        "citation": {
+            "page_number": row["page_number"],
+            "section": row["section"],
+            "source_file": row["source_file"],
+        },
+        "fts_rank": round(
+            float(row["fts_rank"]),
+            4
+        ),
+    }
+)
 
     return results
 
