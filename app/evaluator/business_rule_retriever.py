@@ -37,10 +37,10 @@ Question:
     decision = response.content.strip().upper()
 
 
-    print(
-        "BUSINESS RULE REQUIRED:",
-        decision
-    )
+    # print(
+    #     "BUSINESS RULE REQUIRED:",
+    #     decision
+    # )
 
 
     business_docs = []
@@ -55,15 +55,15 @@ Question:
             }
         )
 
-    print("======= BUSINESS RULE DOCS =======")
+    # print("======= BUSINESS RULE DOCS =======")
     
-    for doc in business_docs:
-        print(doc["content"])     
+    # for doc in business_docs:
+    #     print(doc["content"])     
 
 
-    print("FINAL BUSINESS RULE DOCS COUNT:", len(business_docs))
-    print("STATE BUSINESS RULE DOCS:")
-    print(business_docs)       
+    # print("FINAL BUSINESS RULE DOCS COUNT:", len(business_docs))
+    # print("STATE BUSINESS RULE DOCS:")
+    # print(business_docs)       
 
 
     return {

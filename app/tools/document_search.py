@@ -219,7 +219,7 @@ def hybrid_search(query: str, k: int = 5):
     }
 )
 
-    print("VECTOR RESULT COUNT:", len(vector_results))
+    # print("VECTOR RESULT COUNT:", len(vector_results))
 
     # --------------------------------------------------
     # 2. Full Text Search
@@ -231,7 +231,7 @@ def hybrid_search(query: str, k: int = 5):
     }
 )
 
-    print("FTS RESULT COUNT:", len(fts_results))
+    # print("FTS RESULT COUNT:", len(fts_results))
 
     # --------------------------------------------------
     # 3. Reciprocal Rank Fusion

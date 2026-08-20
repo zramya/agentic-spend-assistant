@@ -31,9 +31,9 @@ Query:
 
 def customer_context_node(state: AdvisorState) -> AdvisorState:
 
-    print("========== 2. INSIDE customer_context_node ==========")
-    print("QUERY:", state.get("query"))
-    print("CUSTOMER ID BEFORE:", state.get("customer_id"))
+    # print("========== 2. INSIDE customer_context_node ==========")
+    # print("QUERY:", state.get("query"))
+    # print("CUSTOMER ID BEFORE:", state.get("customer_id"))
 
     db = get_sql_database()
 

@@ -238,6 +238,7 @@ def handle_personal_conversation(message: str):
         "who am i",
         "what is my name",
         "do you know my name",
+        "who are you talking to"
     ]
 
     if lower_text in identity_questions:
