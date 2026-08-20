@@ -171,9 +171,12 @@ def answer_generator_node(state: AdvisorState) -> AdvisorState:
         )
 
         used_pages = result.get(
-            "used_pages",
-            []
-        )
+        "used_pages",
+        []
+    )
+
+        print("========== LLM USED PAGES ==========")
+        print(used_pages)
 
 
     except Exception:
@@ -314,26 +317,119 @@ def answer_generator_node(state: AdvisorState) -> AdvisorState:
 
 
     # --------------------------------------------------
+    # Extract only images that match the citations
+    # actually used by the answer
+    # --------------------------------------------------
+    # --------------------------------------------------
+        # Extract images matching the answer citations
+        # --------------------------------------------------
+
+        images = []
+
+        if state.get("route") != "RDBMS":
+
+            for citation in policy_citations:
+
+                citation_page = str(
+                    citation.get("page_number")
+                )
+
+                citation_section = citation.get(
+                    "section"
+                )
+
+                citation_source = citation.get(
+                    "source_file"
+                )
+
+                # Find image chunks matching this citation
+                matching_images = [
+                    doc
+                    for doc in docs
+                    if (
+                        doc.get("content_type") == "image"
+                        and doc.get("image_path")
+                        and str(
+                            doc.get("citation", {}).get(
+                                "page_number"
+                            )
+                        ) == citation_page
+                        and doc.get("citation", {}).get(
+                            "section"
+                        ) == citation_section
+                        and doc.get("citation", {}).get(
+                            "source_file"
+                        ) == citation_source
+                    )
+                ]
+
+                # If an image exists for this citation,
+                # select the highest reranked one
+                if matching_images:
+
+                    matching_images.sort(
+                        key=lambda x: x.get(
+                            "rerank_score",
+                            0
+                        ),
+                        reverse=True
+                    )
+
+                    best_image = matching_images[0]
+
+                    image_citation = best_image.get(
+                        "citation",
+                        {}
+                    )
+
+                    images.append(
+                        {
+                            "image_path": best_image.get(
+                                "image_path"
+                            ),
+                            "mime_type": best_image.get(
+                                "mime_type"
+                            ),
+                            "page_number": image_citation.get(
+                                "page_number"
+                            ),
+                            "section": image_citation.get(
+                                "section"
+                            ),
+                            "source_file": image_citation.get(
+                                "source_file"
+                            ),
+                            "rerank_score": best_image.get(
+                                "rerank_score",
+                                0
+                            ),
+                        }
+                    )
+
+        print("========== FINAL IMAGES ==========")
+        print(images)
+    # --------------------------------------------------
     # Final response
     # --------------------------------------------------
-
     final_response = {
 
-        "query": state["query"],
+    "query": state["query"],
 
-        "answer": answer,
+    "answer": answer,
 
-        "policy_citations": policy_citations,
+    "images": images,
 
-        "page_no": page_no,
+    "policy_citations": policy_citations,
 
-        "document_name": document_name,
+    "page_no": page_no,
 
-        "sql_query_executed": state.get(
-            "generated_sql",
-            ""
-        )
-    }
+    "document_name": document_name,
+
+    "sql_query_executed": state.get(
+        "generated_sql",
+        ""
+    )
+}
 
 
 

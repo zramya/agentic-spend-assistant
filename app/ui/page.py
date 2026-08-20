@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 import requests
 import uuid
@@ -478,42 +480,67 @@ if prompt:
                         data = response.json()
 
                         answer = data.get(
-                            "answer",
-                            "No answer available.",
-                        )
-
-                        # -------------------------------------------------------------
-                        # Display Answer
-                        # -------------------------------------------------------------
-
-                        message_placeholder.markdown(answer)
-
-                        # -------------------------------------------------------------
-                        # Optional citations
-                        # -------------------------------------------------------------
-
-                        citations = data.get(
-                        "policy_citations",
-                        [],
+                        "answer",
+                        "No answer available.",
                     )
 
-                        if citations:
+                    images = data.get(
+                        "images",
+                        []
+                    )
 
-                            with st.expander("📚 Sources"):
+                    # -------------------------------------------------------------
+                    # Display answer OR image
+                    # -------------------------------------------------------------
 
-                                for index, citation in enumerate(
-                                    citations,
-                                    start=1,
-                                ):
+                    if images:
 
-                                    st.markdown(
-                                        f"""
-                                        **{index}. {citation.get('source_file')}**
+                        # Image question:
+                        # Show ONLY the retrieved image.
+                        for image in images:
 
-                                        - Page: {citation.get('page_number')}
-                                        - Section: {citation.get('section')}
-                                        """
-                                    )
+                            image_path = image.get("image_path")
+
+                            if image_path:
+
+                                st.image(
+                                    image_path,
+                                    use_container_width=True,
+                                )
+
+                    else:
+
+                        # Normal text question:
+                        # Show the generated answer.
+                        message_placeholder.markdown(answer)
+
+
+                    # -------------------------------------------------------------
+                    # Optional citations
+                    # -------------------------------------------------------------
+
+                    citations = data.get(
+                        "policy_citations",
+                        []
+                    )
+
+                    if citations:
+
+                        with st.expander("📚 Sources"):
+
+                            for index, citation in enumerate(
+                                citations,
+                                start=1,
+                            ):
+
+                                st.markdown(
+                                    f"""
+                                    **{index}. {citation.get('source_file')}**
+
+                                    - Page: {citation.get('page_number')}
+                                    - Section: {citation.get('section')}
+                                    """
+                                )
                             # -------------------------------------------------------------
                             # Optional metadata
                             # -------------------------------------------------------------

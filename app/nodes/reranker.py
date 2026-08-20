@@ -55,6 +55,17 @@ def rerank_node(state: AdvisorState):
         )
 
 
+        print("===== DEBUG RERANKED DOCS =====")
+
+    for doc in reranked_docs:
+        print(
+            "TYPE:", doc.get("content_type"),
+            "| IMAGE:", doc.get("image_path"),
+            "| MIME:", doc.get("mime_type"),
+            "| PAGE:", doc.get("citation", {}).get("page_number")
+        )
+
+
     print(
         f"[rerank_node] Top {len(reranked_docs)} documents:"
     )

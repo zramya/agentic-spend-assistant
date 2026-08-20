@@ -56,17 +56,20 @@ def vector_search(query: str, k: int = 5):
 
     sql = """
         SELECT
-            content,
-            page_number,
-            section,
-            source_file,
-            1 - (embedding <=> %(embedding)s::vector) AS score
+    content,
+    chunk_type,
+    image_path,
+    mime_type,
+    page_number,
+    section,
+    source_file,
+    1 - (embedding <=> %(embedding)s::vector) AS score
 
-        FROM multimodal_chunks
+FROM multimodal_chunks
 
-        ORDER BY embedding <=> %(embedding)s::vector
+ORDER BY embedding <=> %(embedding)s::vector
 
-        LIMIT %(k)s;
+LIMIT %(k)s;
     """
 
     with get_db_conn() as conn:
@@ -87,16 +90,19 @@ def vector_search(query: str, k: int = 5):
 
     for row in rows:
         results.append(
-            {
-                "content": row["content"],
-                "citation": {
-                    "page_number": row["page_number"],
-                    "section": row["section"],
-                    "source_file": row["source_file"],
-                },
-                "score": round(float(row["score"]), 4),
-            }
-        )
+        {
+            "content": row["content"],
+            "content_type": row["chunk_type"],
+            "image_path": row["image_path"],
+            "mime_type": row["mime_type"],
+            "citation": {
+                "page_number": row["page_number"],
+                "section": row["section"],
+                "source_file": row["source_file"],
+            },
+            "score": round(float(row["score"]), 4),
+        }
+    )
 
     return results
 

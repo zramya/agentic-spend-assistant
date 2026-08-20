@@ -9,6 +9,14 @@ class PolicyCitation(BaseModel):
     source_file: str
 
 
+class RetrievedImage(BaseModel):
+    image_path: str
+    mime_type: Optional[str] = None
+    page_number: Optional[int] = None
+    section: Optional[str] = None
+    source_file: Optional[str] = None    
+
+
 
 class SpendSummaryRequest(BaseModel):
     query: str = Field(description="The user's question")
@@ -50,14 +58,22 @@ class RewardPoints(BaseModel):
 
 
 class SpendSummaryResponse(BaseModel):
-       query: str = Field(description="The given query by user")
-       answer: str = Field(description="The generated response")
-       policy_citations: List[PolicyCitation] = Field(
-            description="Policy citations for the documents retrieved"
-       )
-       sql_query_executed: Optional[str] = Field(
-            description="The AI generated and executed SQL query for the query"
-        )
+    query: str = Field(description="The given query by user")
+
+    answer: str = Field(description="The generated response")
+
+    images: List[RetrievedImage] = Field(
+        default_factory=list,
+        description="Images retrieved from the document"
+    )
+
+    policy_citations: List[PolicyCitation] = Field(
+        description="Policy citations for the documents retrieved"
+    )
+
+    sql_query_executed: Optional[str] = Field(
+        description="The AI generated and executed SQL query for the query"
+    )
     # card_id: str
     # customer_name: str
     # billing_month: str
