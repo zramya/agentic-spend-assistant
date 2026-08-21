@@ -428,11 +428,18 @@ if prompt:
     # Greetings, name questions and acknowledgements do NOT go to the
     # backend/LangGraph/LLM.
     # -------------------------------------------------------------------------
+    print("========== PROMPT RECEIVED ==========")
+    print("PROMPT:", prompt)
 
     personal_response = handle_personal_conversation(prompt)
 
-    if personal_response:
+    print("========== PERSONAL CHECK ==========")
+    print("PERSONAL RESPONSE:", personal_response)
 
+
+  
+    if personal_response:
+        
         with st.chat_message("assistant"):
 
             st.markdown(personal_response)
@@ -470,8 +477,13 @@ if prompt:
                         json=payload,
                         timeout=120,
                     )
-
+                    print("STATUS CODE:", response.status_code)
+                    print("RESPONSE:", response.text)
                     # -----------------------------------------------------------------
+                    # Successful response
+                    # -----------------------------------------------------------------
+
+                                        # -----------------------------------------------------------------
                     # Successful response
                     # -----------------------------------------------------------------
 
@@ -480,81 +492,81 @@ if prompt:
                         data = response.json()
 
                         answer = data.get(
-                        "answer",
-                        "No answer available.",
-                    )
+                            "answer",
+                            "No answer available.",
+                        )
 
-                    images = data.get(
-                        "images",
-                        []
-                    )
+                        images = data.get(
+                            "images",
+                            [],
+                        )
 
-                    # -------------------------------------------------------------
-                    # Display answer OR image
-                    # -------------------------------------------------------------
+                        # -------------------------------------------------------------
+                        # Display answer OR image
+                        # -------------------------------------------------------------
 
-                    if images:
+                        if images:
 
-                        # Image question:
-                        # Show ONLY the retrieved image.
-                        for image in images:
+                            # Image question:
+                            # Show ONLY the retrieved image.
+                            for image in images:
 
-                            image_path = image.get("image_path")
+                                image_path = image.get("image_path")
 
-                            if image_path:
+                                if image_path:
 
-                                st.image(
-                                    image_path,
-                                    use_container_width=True,
-                                )
-
-                    else:
-
-                        # Normal text question:
-                        # Show the generated answer.
-                        message_placeholder.markdown(answer)
-
-
-                    # -------------------------------------------------------------
-                    # Optional citations
-                    # -------------------------------------------------------------
-
-                    citations = data.get(
-                        "policy_citations",
-                        []
-                    )
-
-                    if citations:
-
-                        with st.expander("📚 Sources"):
-
-                            for index, citation in enumerate(
-                                citations,
-                                start=1,
-                            ):
-
-                                st.markdown(
-                                    f"""
-                                    **{index}. {citation.get('source_file')}**
-
-                                    - Page: {citation.get('page_number')}
-                                    - Section: {citation.get('section')}
-                                    """
-                                )
-                            # -------------------------------------------------------------
-                            # Optional metadata
-                            # -------------------------------------------------------------
-
-                                retrieval_info = data.get(
-                                        "retrieval",
-                                        None,
+                                    st.image(
+                                        image_path,
+                                        use_container_width=True,
                                     )
 
-                                if retrieval_info:
+                        else:
 
-                                    with st.expander("🔎 Retrieval Details"):
+                            # Normal text question:
+                            # Show ONLY the generated answer.
+                            message_placeholder.markdown(answer)
 
-                                        st.json(retrieval_info)
+                        # -------------------------------------------------------------
+                        # Optional citations
+                        # -------------------------------------------------------------
+
+                        citations = data.get(
+                            "policy_citations",
+                            []
+                        )
+
+                        if citations:
+
+                            with st.expander("📚 Sources"):
+
+                                for index, citation in enumerate(
+                                    citations,
+                                    start=1,
+                                ):
+
+                                    st.markdown(
+                                        f"""
+                                        **{index}. {citation.get('source_file')}**
+
+                                        - Page: {citation.get('page_number')}
+                                        - Section: {citation.get('section')}
+                                        """
+                                    )
+
+                        # -------------------------------------------------------------
+                        # Optional retrieval metadata
+                        # -------------------------------------------------------------
+
+                        retrieval_info = data.get(
+                            "retrieval",
+                            None,
+                        )
+
+                        if retrieval_info:
+
+                            with st.expander("🔎 Retrieval Details"):
+
+                                st.json(retrieval_info)
 
                         # -------------------------------------------------------------
                         # Save assistant response
@@ -583,7 +595,6 @@ if prompt:
                             "assistant",
                             error_msg,
                         )
-
                 # ---------------------------------------------------------------------
                 # Connection error
                 # ---------------------------------------------------------------------
